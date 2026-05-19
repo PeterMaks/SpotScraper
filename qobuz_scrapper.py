@@ -4,12 +4,15 @@ import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys  # Added for pressing Enter/Return
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-def parse_spotify_history(json_directory):
-    download_list = set()
+def parse_spotify_history(json_directory, search_mode="albums", album_threshold=4):
+    """Parses Spotify Extended Streaming History into a unique search list."""
+    albums_data = {}  
+    standalone_tracks = set()
+    
     for filename in os.listdir(json_directory):
         if filename.endswith(".json"):
             filepath = os.path.join(json_directory, filename)
@@ -18,23 +21,42 @@ def parse_spotify_history(json_directory):
                     data = json.load(f)
                 except json.JSONDecodeError:
                     continue
+                
                 for stream in data:
                     track = stream.get("master_metadata_track_name")
                     artist = stream.get("master_metadata_album_artist_name")
+                    album = stream.get("master_metadata_album_album_name")
+                    
                     if track and artist:
-                        query = f"{track} {artist}"
-                        download_list.add(query)
-    return list(download_list)
+                        if search_mode == "albums" and album:
+                            key = (artist, album)
+                            if key not in albums_data:
+                                albums_data[key] = set()
+                            albums_data[key].add(track)
+                        else:
+                            standalone_tracks.add(f"{track} {artist}")
+                            
+    download_list = list(standalone_tracks)
+    
+    if search_mode == "albums":
+        for (artist, album), tracks in albums_data.items():
+            if len(tracks) >= album_threshold:
+                download_list.append(f"{album} {artist}")
+            else:
+                for t in tracks:
+                    download_list.append(f"{t} {artist}")
+                
+    return list(set(download_list))
 
-def scrape_qobuz_squid(download_list):
+def scrape_qobuz_squid(download_list, search_mode):
     base_url = "https://qobuz.squid.wtf"
     results = {}
     
-    # 1. Setup automatic downloading directory
+    # 1. Prepare secure downloads folder
     download_dir = os.path.join(os.getcwd(), "downloads")
     os.makedirs(download_dir, exist_ok=True)
-    print(f"Files will be downloaded to: {download_dir}")
 
+    # 2. Configure Chrome to run cleanly and auto-download
     chrome_options = Options()
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
@@ -47,57 +69,79 @@ def scrape_qobuz_squid(download_list):
     }
     chrome_options.add_experimental_option("prefs", prefs)
     
-    print("Launching browser...")
+    print(f"Launching browser... Files will drop into: {download_dir}")
     driver = webdriver.Chrome(options=chrome_options)
-    wait = WebDriverWait(driver, 15) # Increased wait time slightly for safety
+    wait = WebDriverWait(driver, 15) 
+    short_wait = WebDriverWait(driver, 3) # For quick UI checks
     
     try:
-        # Load the base website ONCE
         driver.get(base_url)
-        time.sleep(2) # Let the initial React/Vue app load
+        time.sleep(3) # Initial load allowance for Next.js hydration
         
         for item in download_list:
             print(f"Searching for: {item}")
             
             try:
-                # --- NEW: SEARCH BOX INTERACTION ---
-                # Find the search input using the ID from your HTML
-                search_box = wait.until(EC.element_to_be_clickable((By.ID, "search")))
+                # --- A. Filter Selection (Radix UI Dropdown) ---
+                # We do this first to ensure the filter is correct before we search
+                menu_btn_xpath = "//button[@aria-haspopup='menu']"
+                try:
+                    menu_btn = wait.until(EC.presence_of_element_located((By.XPATH, menu_btn_xpath)))
+                    
+                    # Check what the button currently says
+                    current_filter = menu_btn.text.strip().lower()
+                    
+                    if search_mode.lower() not in current_filter:
+                        # Open the dropdown menu via JS click
+                        driver.execute_script("arguments[0].click();", menu_btn)
+                        time.sleep(0.5) # Wait for Radix animation
+                        
+                        # Find the exact menu item and click it
+                        item_xpath = f"//div[@role='menuitem' and contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{search_mode}')]"
+                        menu_item = wait.until(EC.presence_of_element_located((By.XPATH, item_xpath)))
+                        driver.execute_script("arguments[0].click();", menu_item)
+                        print(f"  -> Switched filter to: {search_mode.capitalize()}")
+                        time.sleep(1)
+                except Exception as e:
+                    print("  -> Could not interact with filter menu. Relying on default.")
+
+                # --- B. Execute Search ---
+                search_box = wait.until(EC.presence_of_element_located((By.ID, "search")))
                 
-                # Clear the search box (important for the 2nd, 3rd, 4th songs)
-                # Modern web apps sometimes ignore .clear(), so we simulate Ctrl+A then Backspace
+                # Clear existing text (React-safe method)
                 search_box.send_keys(Keys.CONTROL + "a")
                 search_box.send_keys(Keys.BACKSPACE)
                 
-                # Type the query and press ENTER
+                # Input new search and hit Enter
                 search_box.send_keys(item)
                 search_box.send_keys(Keys.RETURN)
                 
-                # Give the site a moment to fetch the search results
-                time.sleep(3) 
-
-                # --- TARGETING THE DOWNLOAD BUTTON ---
-                xpath_selector = "//button[.//svg[contains(@class, 'lucide-download')]]"
+                # Wait for the site to process the search results
+                time.sleep(4) 
                 
-                download_button = wait.until(
-                    EC.element_to_be_clickable((By.XPATH, xpath_selector)) 
-                )
+                # --- C. Target and Download ---
+                # Based on the HTML, the result card is a div with class 'group'
+                # The download button has an SVG with class 'lucide-download'
+                dl_btn_xpath = "(//div[contains(@class, 'group')]//button[.//svg[contains(@class, 'lucide-download')]])[1]"
                 
-                # Click the button
-                download_button.click()
-                print(f"✅ Clicked download for: {item}")
+                dl_btn = wait.until(EC.presence_of_element_located((By.XPATH, dl_btn_xpath)))
+                
+                # Force click the deeply nested, invisible button using JavaScript
+                driver.execute_script("arguments[0].click();", dl_btn)
+                
+                print(f"✅ Download Triggered for: {item}")
                 results[item] = "Success"
                 
-                # Wait for download to process before searching the next song
-                time.sleep(5) 
+                # Wait 7 seconds for the backend to zip and start the actual file download
+                time.sleep(7) 
                 
             except Exception as e:
-                print(f"❌ Failed processing '{item}'. It might not exist on the site.")
-                results[item] = "Failed: Not found or error"
+                print(f"❌ Failed processing '{item}'. No results found or UI error.")
+                results[item] = "Failed: Not found"
             
     finally:
-        print("Waiting 10 seconds for final downloads to finish...")
-        time.sleep(10)
+        print("\nWaiting 20 seconds for any final downloads to finish...")
+        time.sleep(20)
         driver.quit()
         
     return results
@@ -109,17 +153,25 @@ if __name__ == "__main__":
         print(f"Please create a folder named '{json_folder}' and put your Spotify JSONs there.")
         exit()
         
-    items_to_download = parse_spotify_history(json_folder)
-    print(f"Found {len(items_to_download)} unique items to search.")
+    print("How would you like to search for your Spotify history?")
+    print("[1] Group into Albums")
+    print("[2] Search Individual Tracks Only")
+    
+    choice = input("Enter 1 or 2: ").strip()
+    mode = "albums" if choice == "1" else "tracks" 
+    
+    items_to_download = parse_spotify_history(json_folder, search_mode=mode, album_threshold=4)
+    print(f"\nFound {len(items_to_download)} total queries to execute.")
     
     if not items_to_download:
         print("No valid Spotify streams found.")
         exit()
     
+    # Run scraper on a test limit
     test_limit = 5
     print(f"\nRunning test on first {test_limit} items...")
     
-    scrape_log = scrape_qobuz_squid(items_to_download[:test_limit])
+    scrape_log = scrape_qobuz_squid(items_to_download[:test_limit], search_mode=mode)
     
     with open('scrape_log.json', 'w', encoding='utf-8') as f:
         json.dump(scrape_log, f, indent=4, ensure_ascii=False)
