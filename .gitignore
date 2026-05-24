@@ -1,2 +1,8 @@
 downloads/Tarrus Riley - Love Salute.flac
 downloads/ 
+dashboard/node_modules/
+dashboard/backend/node_modules/
+dashboard/.agents
+docs
+.agents
+recap_data.json
