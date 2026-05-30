@@ -5,4 +5,5 @@ dashboard/backend/node_modules/
 dashboard/.agents
 docs
 .agents
+.venv
 recap_data.json

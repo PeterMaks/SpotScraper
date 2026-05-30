@@ -200,23 +200,52 @@ def search_and_scrape(download_list, base_url):
     return results
 
 if __name__ == "__main__":
+    import sys
+    
     # 1. Define the folder containing your Spotify History JSONs
-    json_folder = 'json_directory'
+    json_folder = 'spotify_data' if os.path.exists('spotify_data') else 'json_directory'
     
-    if not os.path.exists(json_folder):
-        print(f"Please create a folder named '{json_folder}' and put your JSONs there.")
-        exit()
-        
-    items_to_download = parse_spotify_history(json_folder)
-    print(f"Parsed JSONs. Found {len(items_to_download)} unique items to download.")
-    
-    if not items_to_download:
-        print("No valid Spotify streams found. Check your JSON format.")
-        exit()
-    
-    # 2. Get the Qobuz-DL website URL (default to the provided one)
+    # Check if arguments are passed from a runner (e.g. Node backend)
+    # Argument format: 
+    #   python Scraper.py query "[Search Query]" [website_url]
+    #   python Scraper.py [limit] [website_url]
     default_url = "https://qobuz.squid.wtf"
-    target_website = input(f"Enter the Qobuz-DL website URL (default: {default_url}): ").strip()
+    target_website = default_url
+    items_to_download = []
+    test_limit = 3
+    is_single_query = False
+
+    if len(sys.argv) > 1 and sys.argv[1] == "query":
+        is_single_query = True
+        if len(sys.argv) > 2:
+            items_to_download = [sys.argv[2]]
+        else:
+            items_to_download = ["Test Track"]
+        test_limit = 1
+        if len(sys.argv) > 3:
+            target_website = sys.argv[3].strip()
+    else:
+        if not os.path.exists(json_folder):
+            print(f"Please create a folder named '{json_folder}' and put your JSONs there.")
+            exit()
+            
+        items_to_download = parse_spotify_history(json_folder)
+        print(f"Parsed JSONs. Found {len(items_to_download)} unique items to download.")
+        
+        if not items_to_download:
+            print("No valid Spotify streams found. Check your JSON format.")
+            exit()
+            
+        if len(sys.argv) > 1:
+            try:
+                test_limit = int(sys.argv[1])
+            except ValueError:
+                print(f"Invalid limit argument: {sys.argv[1]}. Using default of 3.")
+                
+        if len(sys.argv) > 2:
+            target_website = sys.argv[2].strip()
+        else:
+            target_website = input(f"Enter the Qobuz-DL website URL (default: {default_url}): ").strip()
     
     if not target_website:
         target_website = default_url
@@ -226,11 +255,13 @@ if __name__ == "__main__":
         target_website = target_website[:-1]
     
     # 3. Start Scraping with live results
-    test_limit = 3  # Start with 3 items to test
     print(f"\n{'='*70}")
     print(f"🎵 QOBUZ-DL BATCH DOWNLOADER")
     print(f"{'='*70}")
-    print(f"Starting search and download for first {test_limit} items...")
+    if is_single_query:
+        print(f"Starting single search/download for query: {items_to_download[0]}...")
+    else:
+        print(f"Starting search and download for first {test_limit} items...")
     print(f"(Each search will display clickable results with download timers)\n")
     
     overall_start = time.time()

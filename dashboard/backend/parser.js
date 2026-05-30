@@ -2,112 +2,115 @@ const fs = require('fs-extra');
 const path = require('path');
 
 async function aggregateStats() {
-  const dataDir = path.join(__dirname, '../spotify_data');
+  const dataDir = path.join(__dirname, '../../spotify_data');
+  
   const stats = {
-    totalHours: 0,
-    topArtists: {}, // artistName -> hours
-    topTracks: []   // Array of { name, artist, album, hours }
+    totalMusicMs: 0,
+    totalPodcastMs: 0,
+    uniqueArtists: new Set(),
+    uniqueTracks: new Set(),
+    uniquePodcasts: new Set(),
+    artists: {}, // artistName -> ms
+    tracks: {},  // trackKey -> { name, artist, album, ms }
+    podcasts: {} // showName -> ms
   };
 
   try {
+    if (!(await fs.pathExists(dataDir))) {
+      console.warn(`Spotify data directory not found at ${dataDir}`);
+      return {
+        totalHours: 0,
+        totalMusicHours: 0,
+        totalPodcastHours: 0,
+        uniqueArtists: 0,
+        uniqueTracks: 0,
+        uniquePodcasts: 0,
+        topArtists: [],
+        topTracks: [],
+        topPodcasts: []
+      };
+    }
+
     const files = (await fs.readdir(dataDir)).filter(f => f.endsWith('.json'));
 
     for (const file of files) {
       const filePath = path.join(dataDir, file);
       const data = await fs.readJson(filePath);
 
-      // Assuming data is an array of objects: { trackName, artistName, albumName, msPlayed }
-      // or similar structure from Spotify streaming history
       if (Array.isArray(data)) {
         for (const entry of data) {
-          const hours = entry.msPlayed / (1000 * 60 * 60);
-          stats.totalHours += hours;
+          const ms = entry.ms_played || 0;
+          if (ms <= 0) continue;
 
-          const artist = entry.artistName || 'Unknown Artist';
-          stats.topArtists[artist] = (stats.topArtists[artist] || 0) + hours;
+          const track = entry.master_metadata_track_name;
+          const artist = entry.master_metadata_album_artist_name;
+          const album = entry.master_metadata_album_album_name;
+          const show = entry.episode_show_name;
+          const episode = entry.episode_name;
 
-          // Track tracking: we need to keep track of tracks to handle the "Top Tracks" requirement
-          // Since we are aggregating, we'll store them in a way that we can later sort.
-          // For simplicity in this task, we'll use a Map or just add to a list and aggregate later.
+          if (track && artist) {
+            // It's music
+            stats.totalMusicMs += ms;
+            stats.uniqueArtists.add(artist);
+            stats.uniqueTracks.add(`${track} | ${artist}`);
+            stats.artists[artist] = (stats.artists[artist] || 0) + ms;
+
+            const trackKey = `${track}|${artist}|${album || 'Unknown Album'}`;
+            if (!stats.tracks[trackKey]) {
+              stats.tracks[trackKey] = {
+                name: track,
+                artist: artist,
+                album: album || 'Unknown Album',
+                ms: 0
+              };
+            }
+            stats.tracks[trackKey].ms += ms;
+          } else if (show) {
+            // It's a podcast
+            stats.totalPodcastMs += ms;
+            stats.uniquePodcasts.add(show);
+            stats.podcasts[show] = (stats.podcasts[show] || 0) + ms;
+          }
         }
       }
     }
 
-    // Post-processing: Transform topArtists to sorted array
-    const sortedArtists = Object.entries(stats.topArtists)
-      .map(([name, hours]) => ({ name, hours }))
-      .sort((a, b) => b.hours - a.hours)
-      .slice(0, 10);
+    const msToHours = (ms) => Math.round((ms / (1000 * 60 * 60)) * 10) / 10;
 
-    // For tracks, we need a more detailed structure.
-    // Let's re-read and do it properly.
-    // Since we need tracks, we'll need a second pass or a different structure.
+    const topArtists = Object.entries(stats.artists)
+      .map(([name, ms]) => ({ name, hours: msToHours(ms) }))
+      .sort((a, b) => b.hours - a.hours)
+      .slice(0, 20); // Top 20 artists
+
+    const topTracks = Object.values(stats.tracks)
+      .map(t => ({ name: t.name, artist: t.artist, album: t.album, hours: msToHours(t.ms) }))
+      .sort((a, b) => b.hours - a.hours)
+      .slice(0, 20); // Top 20 tracks
+
+    const topPodcasts = Object.entries(stats.podcasts)
+      .map(([name, ms]) => ({ name, hours: msToHours(ms) }))
+      .sort((a, b) => b.hours - a.hours)
+      .slice(0, 10); // Top 10 podcasts
+
+    const totalMusicHours = msToHours(stats.totalMusicMs);
+    const totalPodcastHours = msToHours(stats.totalPodcastMs);
+    const totalHours = msToHours(stats.totalMusicMs + stats.totalPodcastMs);
 
     return {
-      totalHours: stats.totalHours,
-      topArtists: sortedArtists
+      totalHours,
+      totalMusicHours,
+      totalPodcastHours,
+      uniqueArtists: stats.uniqueArtists.size,
+      uniqueTracks: stats.uniqueTracks.size,
+      uniquePodcasts: stats.uniquePodcasts.size,
+      topArtists,
+      topTracks,
+      topPodcasts
     };
   } catch (err) {
-    console.error("Error parsing stats:", err);
+    console.error("Error parsing stats in parser.js:", err);
     throw err;
   }
 }
 
-// Re-implementing with more robust track tracking
-async function aggregateStatsRobust() {
-    const dataDir = path.join(__dirname, '../spotify_data');
-    const stats = {
-      totalHours: 0,
-      topArtists: {},
-      tracks: {} // trackKey -> { name, artist, album, hours }
-    };
-
-    try {
-      const files = (await fs.readdir(dataDir)).filter(f => f.endsWith('.json'));
-
-      for (const file of files) {
-        const filePath = path.join(dataDir, file);
-        const data = await fs.readJson(filePath);
-
-        if (Array.isArray(data)) {
-          for (const entry of data) {
-            const hours = entry.msPlayed / (1000 * 60 * 60);
-            stats.totalmsPlayed = (stats.msPlayed || 0) + entry.msPlayed;
-
-            const artist = entry.artistName || 'Unknown Artist';
-            stats.topArtists[artist] = (stats.topArtists[artist] || 0) + hours;
-
-            const trackName = entry.trackName || 'Unknown Track';
-            const albumName = entry.albumName || 'Unknown Album';
-            const trackKey = `${trackName}|${artist}|${albumName}`;
-
-            if (!stats.tracks[trackKey]) {
-                stats.tracks[trackKey] = { name: trackName, artist, album: albumName, hours: 0 };
-            }
-            stats.tracks[trackKey].hours += hours;
-          }
-        }
-      }
-
-      const totalHours = (stats.msPlayed || 0) / (1000 * 60 * 60);
-      const sortedArtists = Object.entries(stats.topArtists)
-        .map(([name, hours]) => ({ name, hours }))
-        .sort((a, b) => b.hours - a.hours)
-        .slice(0, 10);
-
-      const topTracks = Object.values(stats.tracks)
-        .sort((a, b) => b.hours - a.hours)
-        .slice(0, 10);
-
-      return {
-        totalHours,
-        topArtists: sortedArtists,
-        topTracks
-      };
-    } catch (err) {
-      console.error("Error parsing stats:", err);
-      throw err;
-    }
-  }
-
-module.exports = { aggregateStats: aggregateStatsRobust };
+module.exports = { aggregateStats };

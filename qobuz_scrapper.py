@@ -147,29 +147,68 @@ def scrape_qobuz_squid(download_list, search_mode):
     return results
 
 if __name__ == "__main__":
+    import sys
+    
     json_folder = 'spotify_data' 
+    items_to_download = []
+    mode = "albums"
+    test_limit = 5
+    is_single_query = False
     
-    if not os.path.exists(json_folder):
-        print(f"Please create a folder named '{json_folder}' and put your Spotify JSONs there.")
-        exit()
+    # Check if arguments are passed from a runner (e.g. Node backend)
+    # Argument format:
+    #   python qobuz_scrapper.py query "[Search Query]"
+    #   python qobuz_scrapper.py [mode] [limit]
+    if len(sys.argv) > 1:
+        arg1 = sys.argv[1].strip().lower()
+        if arg1 == "query":
+            is_single_query = True
+            mode = "tracks"
+            test_limit = 1
+            if len(sys.argv) > 2:
+                items_to_download = [sys.argv[2]]
+            else:
+                items_to_download = ["Test Track"]
+        else:
+            mode = arg1
+            if mode not in ["albums", "tracks"]:
+                print(f"Invalid mode argument '{mode}'. Defaulting to 'albums'.")
+                mode = "albums"
+            
+            if len(sys.argv) > 2:
+                try:
+                    test_limit = int(sys.argv[2])
+                except ValueError:
+                    print(f"Invalid limit argument: {sys.argv[2]}. Using default of 5.")
+                    
+            if not os.path.exists(json_folder):
+                print(f"Please create a folder named '{json_folder}' and put your Spotify JSONs there.")
+                exit()
+            items_to_download = parse_spotify_history(json_folder, search_mode=mode, album_threshold=4)
+    else:
+        if not os.path.exists(json_folder):
+            print(f"Please create a folder named '{json_folder}' and put your Spotify JSONs there.")
+            exit()
+            
+        print("How would you like to search for your Spotify history?")
+        print("[1] Group into Albums")
+        print("[2] Search Individual Tracks Only")
         
-    print("How would you like to search for your Spotify history?")
-    print("[1] Group into Albums")
-    print("[2] Search Individual Tracks Only")
+        choice = input("Enter 1 or 2: ").strip()
+        mode = "albums" if choice == "1" else "tracks"
+        test_limit = 5
+        items_to_download = parse_spotify_history(json_folder, search_mode=mode, album_threshold=4)
     
-    choice = input("Enter 1 or 2: ").strip()
-    mode = "albums" if choice == "1" else "tracks" 
-    
-    items_to_download = parse_spotify_history(json_folder, search_mode=mode, album_threshold=4)
     print(f"\nFound {len(items_to_download)} total queries to execute.")
     
     if not items_to_download:
         print("No valid Spotify streams found.")
         exit()
     
-    # Run scraper on a test limit
-    test_limit = 5
-    print(f"\nRunning test on first {test_limit} items...")
+    if is_single_query:
+        print(f"\nRunning single search and download for query: {items_to_download[0]}...")
+    else:
+        print(f"\nRunning test on first {test_limit} items...")
     
     scrape_log = scrape_qobuz_squid(items_to_download[:test_limit], search_mode=mode)
     
