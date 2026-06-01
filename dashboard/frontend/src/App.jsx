@@ -19,6 +19,70 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [queryStatus, setQueryStatus] = useState('');
 
+  // File Upload State
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [uploading, setUploading] = useState(false);
+  
+  // Data Sources
+  const [sourceFiles, setSourceFiles] = useState([]);
+  const [selectedSource, setSelectedSource] = useState('');
+
+  const handleFileUpload = async (event) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    setUploadStatus('Uploading files...');
+    
+    let successCount = 0;
+    
+    try {
+      for (const file of files) {
+        // Read file as Base64 Data URL
+        const base64Data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result;
+            // Extract only the base64 part after the comma
+            const base64 = result.split(',')[1];
+            resolve(base64);
+          };
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        });
+        
+        // POST to backend
+        const res = await fetch(`${backendUrl}/api/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: file.name,
+            content: base64Data
+          })
+        });
+        
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Server returned ${res.status}: ${errText.slice(0, 100) || res.statusText}`);
+        }
+        
+        const data = await res.json();
+        if (data.success) {
+          successCount++;
+        }
+      }
+      
+      setUploadStatus(`Successfully uploaded ${successCount} file(s).`);
+      fetchStats(); // Refresh stats
+    } catch (err) {
+      console.error(err);
+      setUploadStatus(`Upload failed: ${err.message}`);
+    } finally {
+      setUploading(false);
+      setTimeout(() => setUploadStatus(''), 5000);
+    }
+  };
+
   // Search/Filters
   const [dashSearch, setDashSearch] = useState('');
   const [downloadsSearch, setDownloadsSearch] = useState('');
@@ -40,6 +104,7 @@ function App() {
     fetchStats();
     fetchDownloads();
     fetchLogs();
+    fetchSources();
     checkScraperStatus();
 
     return () => {
@@ -69,6 +134,16 @@ function App() {
       }
     }
   }, [scraperStatus]);
+
+  const fetchSources = async () => {
+    try {
+      const res = await fetch(`${backendUrl}/api/sources`);
+      const data = await res.json();
+      setSourceFiles(data.sources || []);
+    } catch (err) {
+      console.error('Error fetching sources:', err);
+    }
+  };
 
   const fetchStats = async () => {
     setLoadingStats(true);
@@ -155,7 +230,8 @@ function App() {
           script: scraperType,
           limit: scraperLimit,
           website: scraperUrl,
-          mode: scraperMode
+          mode: scraperMode,
+          sourceFile: selectedSource || undefined
         })
       });
       const data = await res.json();
@@ -383,6 +459,35 @@ function App() {
               </button>
             </div>
 
+            {/* Upload Zone */}
+            <div className="panel" style={{ marginBottom: '24px', padding: '20px' }}>
+              <span className="panel-title" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Load Your Own Data</span>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
+                Upload Spotify data files (e.g., <code>StreamingHistory*.json</code>, <code>Playlist*.json</code>) or custom <code>.csv</code> / Excel (<code>.xlsx</code>, <code>.xls</code>) files (with <code>Track, Artist, Playlist</code> headers or simple format).
+              </p>
+              
+              <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <label className="btn btn-primary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  Choose Files to Upload
+                  <input 
+                    type="file" 
+                    multiple 
+                    accept=".json,.csv,.xlsx,.xls" 
+                    onChange={handleFileUpload} 
+                    style={{ display: 'none' }}
+                    disabled={uploading}
+                  />
+                </label>
+                
+                {uploadStatus && (
+                  <span style={{ fontSize: '0.9rem', color: uploading ? 'var(--accent-blue)' : 'var(--text-color)', fontWeight: 500 }}>
+                    {uploadStatus}
+                  </span>
+                )}
+              </div>
+            </div>
+
             {loadingStats ? (
               <div style={{ textAlign: 'center', padding: '40px' }} className="pulse">
                 <p>Aggregating Spotify stats from history...</p>
@@ -528,8 +633,8 @@ function App() {
         {activeTab === 'scraper' && (
           <div className="tab-content animate-fade-in">
             <div>
-              <h2>Scraper Control Panel</h2>
-              <p style={{ color: 'var(--text-muted)', marginTop: '4px' }}>Configure and trigger batch downloads from Qobuz-DL</p>
+              <h2>Downloader Control Panel</h2>
+              <p style={{ color: 'var(--text-muted)', marginTop: '4px' }}>Configure and trigger batch MP3 downloads from YouTube</p>
             </div>
 
             <div className="scraper-layout">
@@ -541,19 +646,34 @@ function App() {
 
                 <form onSubmit={handleStartScrape}>
                   <div className="form-group">
-                    <label>Scraper Engine</label>
+                    <label>Download Quality</label>
                     <select 
                       className="select"
                       value={scraperType}
                       onChange={(e) => setScraperType(e.target.value)}
                       disabled={scraperStatus === 'running'}
                     >
-                      <option value="api">Qobuz-DL API Client (Fast)</option>
-                      <option value="selenium">Selenium Chrome Automation (Real DL)</option>
+                      <option value="api">YouTube-DL Fast MP3 (192kbps)</option>
+                      <option value="selenium">YouTube-DL High Quality (320kbps)</option>
                     </select>
                   </div>
 
-                  {scraperType === 'selenium' ? (
+                  <div className="form-group">
+                    <label>Data Source (Optional)</label>
+                    <select 
+                      className="select"
+                      value={selectedSource}
+                      onChange={(e) => setSelectedSource(e.target.value)}
+                      disabled={scraperStatus === 'running'}
+                    >
+                      <option value="">-- All Files in spotify_data --</option>
+                      {sourceFiles.map(file => (
+                        <option key={file} value={file}>{file}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {scraperType === 'selenium' && (
                     <div className="form-group">
                       <label>Search Mode</label>
                       <select 
@@ -565,18 +685,6 @@ function App() {
                         <option value="albums">Group into Albums</option>
                         <option value="tracks">Individual Tracks</option>
                       </select>
-                    </div>
-                  ) : (
-                    <div className="form-group">
-                      <label>Target API URL</label>
-                      <input 
-                        type="url"
-                        className="input"
-                        value={scraperUrl}
-                        onChange={(e) => setScraperUrl(e.target.value)}
-                        disabled={scraperStatus === 'running'}
-                        required
-                      />
                     </div>
                   )}
 
@@ -742,7 +850,7 @@ function App() {
 
                 {downloads.length === 0 && (
                   <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    No downloaded audio files found. Start the Selenium scraper to download files!
+                    No downloaded audio files found. Start the downloader to download files!
                   </div>
                 )}
               </div>

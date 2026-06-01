@@ -9,7 +9,8 @@ const app = express();
 const port = 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Serving the downloads directory statically for direct access
 const downloadsDir = path.join(__dirname, '../../downloads');
@@ -32,24 +33,38 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// List files in the downloads directory
+// Helper function to recursively read files in a directory
+async function getFilesRecursive(dir) {
+  let results = [];
+  const list = await fs.readdir(dir);
+  for (const file of list) {
+    const filePath = path.join(dir, file);
+    const stat = await fs.stat(filePath);
+    if (stat && stat.isDirectory()) {
+      results = results.concat(await getFilesRecursive(filePath));
+    } else {
+      results.push(filePath);
+    }
+  }
+  return results;
+}
+
+// List files in the downloads directory recursively
 app.get('/api/downloads', async (req, res) => {
   try {
     await fs.ensureDir(downloadsDir);
-    const files = await fs.readdir(downloadsDir);
+    const filePaths = await getFilesRecursive(downloadsDir);
     const list = [];
 
-    for (const file of files) {
-      const filePath = path.join(downloadsDir, file);
+    for (const filePath of filePaths) {
+      const relativePath = path.relative(downloadsDir, filePath).replace(/\\/g, '/');
       const stat = await fs.stat(filePath);
-      if (stat.isFile()) {
-        list.push({
-          name: file,
-          size: stat.size,
-          mtime: stat.mtime,
-          url: `/api/downloads/file/${encodeURIComponent(file)}`
-        });
-      }
+      list.push({
+        name: relativePath,
+        size: stat.size,
+        mtime: stat.mtime,
+        url: `/api/downloads/file/${encodeURIComponent(relativePath)}`
+      });
     }
 
     // Sort by modified time desc (newest first)
@@ -61,15 +76,15 @@ app.get('/api/downloads', async (req, res) => {
   }
 });
 
-// Delete a download file
-app.delete('/api/downloads/file/:filename', async (req, res) => {
+// Delete a download file (handles subfolders via wildcard match)
+app.delete('/api/downloads/file/*', async (req, res) => {
   try {
-    const filename = req.params.filename;
-    const filePath = path.join(downloadsDir, filename);
+    const relativePath = req.params[0];
+    const filePath = path.join(downloadsDir, relativePath);
 
     if (await fs.pathExists(filePath)) {
       await fs.remove(filePath);
-      res.json({ success: true, message: `Deleted ${filename}` });
+      res.json({ success: true, message: `Deleted ${relativePath}` });
     } else {
       res.status(404).json({ error: 'File not found' });
     }
@@ -106,16 +121,59 @@ app.get('/api/logs', async (req, res) => {
   }
 });
 
+// Upload Spotify history JSON, CSV or Excel file (Base64 decoder)
+app.post('/api/upload', async (req, res) => {
+  try {
+    const { fileName, content } = req.body;
+    if (!fileName || !content) {
+      return res.status(400).json({ error: 'Missing fileName or content.' });
+    }
+
+    const spotifyDataDir = path.join(__dirname, '../../spotify_data');
+    await fs.ensureDir(spotifyDataDir);
+
+    // Clean up filename to prevent directory traversal
+    const safeName = path.basename(fileName);
+    const targetPath = path.join(spotifyDataDir, safeName);
+
+    // Write file decoding from base64
+    const fileBuffer = Buffer.from(content, 'base64');
+    await fs.writeFile(targetPath, fileBuffer);
+
+    res.json({ success: true, message: `Successfully uploaded ${safeName}` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to upload file.' });
+  }
+});
+
+// List available data source files
+app.get('/api/sources', async (req, res) => {
+  try {
+    const spotifyDataDir = path.join(__dirname, '../../spotify_data');
+    if (!(await fs.pathExists(spotifyDataDir))) {
+      return res.json({ sources: [] });
+    }
+    const files = await fs.readdir(spotifyDataDir);
+    const sources = files.filter(f => f.endsWith('.json') || f.endsWith('.csv') || f.endsWith('.xlsx') || f.endsWith('.xls'));
+    res.json({ sources });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to read sources' });
+  }
+});
+
 // Trigger a scraper run
 app.post('/api/scrape/start', (req, res) => {
   if (processStatus === 'running') {
     return res.status(400).json({ error: 'A scrape process is already running.' });
   }
 
-  const { script, limit, website, mode, query } = req.body;
+  const { script, limit, website, mode, query, sourceFile } = req.body;
   
   processType = script || 'api';
-  processLog = `Starting ${processType === 'selenium' ? 'Selenium Scraper' : 'Qobuz-DL API Scraper'}...\n`;
+  processLog = `Starting ${processType === 'selenium' ? 'YouTube-DL High Quality (320kbps)' : 'YouTube-DL Fast MP3 (192kbps)'}...\n`;
+  if (sourceFile) processLog += `Using data source: ${sourceFile}\n`;
   processStatus = 'running';
 
   const rootDir = path.join(__dirname, '../..');
@@ -128,6 +186,7 @@ app.post('/api/scrape/start', (req, res) => {
       args = ['query', query];
     } else {
       args = [mode || 'albums', String(limit || 5)];
+      if (sourceFile) args.push(sourceFile);
     }
   } else {
     scriptPath = path.join(rootDir, 'Scraper.py');
@@ -135,6 +194,7 @@ app.post('/api/scrape/start', (req, res) => {
       args = ['query', query, website || 'https://qobuz.squid.wtf'];
     } else {
       args = [String(limit || 3), website || 'https://qobuz.squid.wtf'];
+      if (sourceFile) args.push(sourceFile);
     }
   }
 
