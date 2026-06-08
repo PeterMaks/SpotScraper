@@ -49,8 +49,8 @@ body {
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
-  background-color: var(--bg-base);
-  background-image: linear-gradient(to bottom, #242424 0%, #121212 40%);
+  background-color: #08080a;
+  background-image: radial-gradient(circle at 50% 0%, #14141a 0%, #08080a 100%);
   background-attachment: fixed;
   color: var(--text-main);
 }

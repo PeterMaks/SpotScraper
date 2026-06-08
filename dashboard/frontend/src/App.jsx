@@ -129,6 +129,42 @@ function App() {
     }
   };
 
+  const handlePlayNext = () => {
+    if (downloads.length === 0) return;
+    const list = downloads.filter(file => file.name.toLowerCase().includes(downloadsSearch.toLowerCase()));
+    const activeList = list.length > 0 ? list : downloads;
+    
+    let nextIndex = 0;
+    if (currentTrack) {
+      const currentIndex = activeList.findIndex(file => file.name === currentTrack.name);
+      if (currentIndex !== -1) {
+        nextIndex = (currentIndex + 1) % activeList.length;
+      }
+    }
+    const nextTrack = activeList[nextIndex];
+    setCurrentTrack(nextTrack);
+    setIsPlaying(true);
+    setCurrentTime(0);
+  };
+
+  const handlePlayPrev = () => {
+    if (downloads.length === 0) return;
+    const list = downloads.filter(file => file.name.toLowerCase().includes(downloadsSearch.toLowerCase()));
+    const activeList = list.length > 0 ? list : downloads;
+    
+    let prevIndex = activeList.length - 1;
+    if (currentTrack) {
+      const currentIndex = activeList.findIndex(file => file.name === currentTrack.name);
+      if (currentIndex !== -1) {
+        prevIndex = (currentIndex - 1 + activeList.length) % activeList.length;
+      }
+    }
+    const prevTrack = activeList[prevIndex];
+    setCurrentTrack(prevTrack);
+    setIsPlaying(true);
+    setCurrentTime(0);
+  };
+
   const handleTimeUpdate = () => {
     if (audioRef.current) {
       setCurrentTime(audioRef.current.currentTime);
@@ -482,6 +518,9 @@ function App() {
 
   return (
     <div className="app-container">
+      <div className="ambient-glow glow-1"></div>
+      <div className="ambient-glow glow-2"></div>
+      <div className="ambient-glow glow-3"></div>
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="logo-section">
@@ -1120,7 +1159,7 @@ function App() {
         src={currentTrack ? `${backendUrl}${currentTrack.url}` : ''}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
-        onEnded={() => setIsPlaying(false)}
+        onEnded={handlePlayNext}
       />
 
       {currentTrack && (
@@ -1130,20 +1169,22 @@ function App() {
               <Icons.Music />
             </div>
             <div className="player-track-details">
-              <div className="player-title" title={currentTrack.name}>
-                {currentTrack.name.replace('.mp3', '')}
+              <div className="player-title" title={currentTrack.title || currentTrack.name.replace('.mp3', '')}>
+                {currentTrack.title || currentTrack.name.replace('.mp3', '')}
               </div>
-              <div className="player-artist">Downloaded Audio</div>
+              <div className="player-artist" title={currentTrack.artist || 'Unknown Artist'}>
+                {currentTrack.artist || 'Unknown Artist'}
+              </div>
             </div>
           </div>
           
           <div className="player-center">
             <div className="player-controls">
-              <button className="player-btn" onClick={() => {}} disabled><Icons.SkipBack /></button>
+              <button className="player-btn" onClick={handlePlayPrev} disabled={downloads.length === 0} title="Previous"><Icons.SkipBack /></button>
               <button className="player-btn primary" onClick={() => currentTrack && setIsPlaying(!isPlaying)} disabled={!currentTrack}>
                 {isPlaying ? <Icons.Pause /> : <Icons.Play />}
               </button>
-              <button className="player-btn" onClick={() => {}} disabled><Icons.SkipForward /></button>
+              <button className="player-btn" onClick={handlePlayNext} disabled={downloads.length === 0} title="Next"><Icons.SkipForward /></button>
             </div>
             <div className="player-progress-container">
               <span className="player-time">{formatTime(currentTime)}</span>

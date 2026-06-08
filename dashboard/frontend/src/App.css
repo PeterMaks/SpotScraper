@@ -3,15 +3,68 @@
   display: grid;
   grid-template-columns: 240px 1fr;
   min-height: 100vh;
-  background-color: var(--bg-base);
+  background-color: transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ambient Glow Backgrounds */
+.ambient-glow {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(140px);
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 0;
+  animation: float-glow 20s infinite alternate ease-in-out;
+}
+.glow-1 {
+  top: -10%;
+  left: 15%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, #1DB954 0%, transparent 70%);
+  animation-duration: 25s;
+}
+.glow-2 {
+  bottom: -5%;
+  right: 5%;
+  width: 700px;
+  height: 700px;
+  background: radial-gradient(circle, #9059FF 0%, transparent 70%);
+  animation-duration: 30s;
+  animation-delay: -5s;
+}
+.glow-3 {
+  top: 35%;
+  left: 45%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, #2E77D0 0%, transparent 70%);
+  animation-duration: 22s;
+  animation-delay: -2s;
+}
+
+@keyframes float-glow {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(40px, 40px) scale(1.1);
+  }
 }
 
 /* Sidebar */
 .sidebar {
-  background-color: #000000;
+  background-color: rgba(10, 10, 10, 0.45);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   padding: 24px;
+  position: relative;
+  z-index: 10;
 }
 
 .logo-section {
@@ -149,20 +202,24 @@
 }
 
 .stat-card {
-  background-color: var(--bg-surface);
+  background-color: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: var(--radius-lg);
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: background-color 0.2s ease, transform 0.2s cubic-bezier(0.3, 0, 0.4, 1);
-  box-shadow: var(--shadow-base);
+  transition: all 0.3s cubic-bezier(0.3, 0, 0.4, 1);
+  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.2);
 }
 
 .stat-card:hover {
-  background-color: var(--bg-card);
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-hover);
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-6px);
+  box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.4);
 }
 
 .stat-label {
@@ -212,13 +269,18 @@
 }
 
 .panel {
-  background-color: var(--bg-surface);
+  background-color: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  box-shadow: var(--shadow-base);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 1;
 }
 
 .panel-header {
@@ -366,15 +428,21 @@
 .terminal-panel {
   display: flex;
   flex-direction: column;
-  background-color: #000000;
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--shadow-base);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
   height: 600px;
+  position: relative;
+  z-index: 1;
 }
 
 .terminal-header {
-  background-color: #181818;
+  background-color: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   padding: 16px 24px;
   display: flex;
   justify-content: space-between;
@@ -676,27 +744,30 @@
 /* Global Audio Player */
 .global-player {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 90px;
-  background-color: rgba(24, 24, 24, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  bottom: 24px;
+  left: 24px;
+  right: 24px;
+  height: 84px;
+  background-color: rgba(15, 15, 15, 0.6);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
   z-index: 1000;
-  transform: translateY(100%);
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(150%);
+  opacity: 0;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease;
 }
 
 .global-player.playing,
 .global-player:not(.playing) {
-  /* Forcing it visible when currentTrack exists */
   transform: translateY(0);
+  opacity: 1;
 }
 
 .player-info {
