@@ -8,3 +8,8 @@ docs
 .venv
 recap_data.json
 bandit_crypto.json
+scrape_audit.log
+dashboard/backend/logs/audit.log
+scrape_audit.log
+
+dashboard/backend/logs/audit.log

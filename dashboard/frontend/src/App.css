@@ -561,6 +561,17 @@
   font-variant-numeric: tabular-nums;
   width: 40px;
   height: 40px;
+  position: relative;
+}
+
+.track-number,
+.playing-eq {
+  /* shown by default, hidden on row hover */
+  transition: opacity 0.15s ease;
+}
+
+.track-row:hover .track-number {
+  opacity: 0;
 }
 
 .track-play-btn {
@@ -572,6 +583,15 @@
   align-items: center;
   justify-content: center;
   padding: 0;
+  position: absolute;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.track-row:hover .track-play-btn {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .playing-eq {
@@ -669,9 +689,9 @@
   padding-left: 12px;
 }
 
-.track-row.playing .track-actions {
-  background-color: rgba(36, 210, 98, 0.1);
-  /* Match row playing color */
+.track-row:hover .track-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .track-actions.visible {
@@ -860,6 +880,7 @@
 .player-btn.primary:hover {
   transform: scale(1.05);
   background-color: #fff;
+  color: var(--bg-base);
 }
 
 .player-progress-container {

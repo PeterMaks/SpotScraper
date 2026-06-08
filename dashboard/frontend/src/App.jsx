@@ -969,8 +969,6 @@ function App() {
                         <div 
                           className={`track-row ${isRowPlaying ? 'playing' : ''}`} 
                           key={file.name}
-                          onMouseEnter={() => setHoveredTrackIndex(index)}
-                          onMouseLeave={() => setHoveredTrackIndex(null)}
                           onDoubleClick={() => handlePlayTrack(file)}
                           onClick={() => {
                             // Single click selects/plays if not playing
@@ -978,15 +976,14 @@ function App() {
                           }}
                         >
                           <div className="track-col-index" onClick={(e) => { e.stopPropagation(); handlePlayTrack(file); }}>
-                            {hoveredTrackIndex === index ? (
-                              <button className="track-play-btn">
-                                {isRowPlaying && isPlaying ? <Icons.Pause /> : <Icons.Play />}
-                              </button>
-                            ) : isRowPlaying && isPlaying ? (
+                            {isRowPlaying && isPlaying ? (
                               <div className="playing-eq"><Icons.Music /></div>
                             ) : (
                               <span className="track-number">{index + 1}</span>
                             )}
+                            <button className="track-play-btn">
+                              {isRowPlaying && isPlaying ? <Icons.Pause /> : <Icons.Play />}
+                            </button>
                           </div>
                           
                           <div className="track-col-title">
@@ -1013,7 +1010,7 @@ function App() {
                               <span className="track-artist-name" style={{ marginTop: '4px' }}>{formatBytes(file.size)}</span>
                             </div>
                             
-                            <div className={`track-actions ${hoveredTrackIndex === index ? 'visible' : ''}`}>
+                            <div className="track-actions">
                               <a href={`${backendUrl}${file.url}`} download={file.name} title="Save to disk" onClick={(e) => e.stopPropagation()}>
                                 <Icons.Download />
                               </a>
