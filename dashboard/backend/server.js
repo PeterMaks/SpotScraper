@@ -6,6 +6,184 @@ const { spawn } = require('child_process');
 const { aggregateStats } = require('./parser');
 const logger = require('./logger');
 
+// --- User Metadata Fallback Logic ---
+
+function normalizeStr(str) {
+  if (!str) return '';
+  return str.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function formatDurationMs(ms) {
+  const seconds = Math.floor(ms / 1000);
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}m ${s}s`;
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+function parseCSV(content) {
+  const lines = content.split(/\r?\n/);
+  if (lines.length === 0) return [];
+  
+  const results = [];
+  const headers = parseCSVLine(lines[0]);
+  
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const values = parseCSVLine(line);
+    const row = {};
+    headers.forEach((header, idx) => {
+      row[header] = values[idx] || '';
+    });
+    results.push(row);
+  }
+  return results;
+}
+
+let cachedUserMetadata = null;
+
+async function loadUserMetadataMap() {
+  const dataDir = path.join(__dirname, '../../spotify_data');
+  const queryToMeta = {};
+  const titleToMeta = {};
+  
+  if (!(await fs.pathExists(dataDir))) {
+    return { queryToMeta, titleToMeta };
+  }
+  
+  try {
+    const files = await fs.readdir(dataDir);
+    
+    for (const file of files) {
+      const filePath = path.join(dataDir, file);
+      const ext = path.extname(file).toLowerCase();
+      
+      if (ext === '.json' && !file.toLowerCase().includes('playlist')) {
+        try {
+          const data = await fs.readJson(filePath);
+          if (Array.isArray(data)) {
+            for (const entry of data) {
+              const track = entry.master_metadata_track_name;
+              const artist = entry.master_metadata_album_artist_name;
+              const album = entry.master_metadata_album_album_name;
+              const ms = entry.ms_played || 0;
+              
+              if (track && artist) {
+                const query = `${track} ${artist}`;
+                const normQuery = normalizeStr(query);
+                const normTitle = normalizeStr(track);
+                
+                const currentDurationMs = (queryToMeta[normQuery] && queryToMeta[normQuery].durationMs) || 0;
+                const durationMs = Math.max(currentDurationMs, ms);
+                
+                const meta = {
+                  title: track,
+                  artist: artist,
+                  album: album || 'Unknown Album',
+                  duration: durationMs > 0 ? formatDurationMs(durationMs) : '-',
+                  durationMs: durationMs
+                };
+                
+                queryToMeta[normQuery] = meta;
+                if (!titleToMeta[normTitle] || titleToMeta[normTitle].durationMs < durationMs) {
+                  titleToMeta[normTitle] = meta;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          logger.warn(`Failed to parse user JSON file: ${file}`, { error: err.message });
+        }
+      } else if (ext === '.csv') {
+        try {
+          const content = await fs.readFile(filePath, 'utf-8');
+          const rows = parseCSV(content);
+          
+          for (const row of rows) {
+            let track = '';
+            let artist = '';
+            let album = '';
+            let durationMs = 0;
+            
+            Object.entries(row).forEach(([key, val]) => {
+              const k = key.toLowerCase().trim();
+              if (['track', 'song', 'title', 'name', 'track name', 'song name'].includes(k)) {
+                track = val;
+              } else if (['artist', 'singer', 'band', 'artist name', 'artist name(s)', 'artists'].includes(k)) {
+                artist = val;
+              } else if (['album', 'album name'].includes(k)) {
+                album = val;
+              } else if (['duration', 'duration (ms)', 'duration_ms', 'ms'].includes(k)) {
+                durationMs = parseInt(val) || 0;
+              }
+            });
+            
+            if (track) {
+              const query = `${track} ${artist}`.trim();
+              const normQuery = normalizeStr(query);
+              const normTitle = normalizeStr(track);
+              
+              const meta = {
+                title: track,
+                artist: artist || 'Unknown Artist',
+                album: album || 'Unknown Album',
+                duration: durationMs > 0 ? formatDurationMs(durationMs) : '-',
+                durationMs: durationMs
+              };
+              
+              queryToMeta[normQuery] = meta;
+              titleToMeta[normTitle] = meta;
+            }
+          }
+        } catch (err) {
+          logger.warn(`Failed to parse user CSV file: ${file}`, { error: err.message });
+        }
+      }
+    }
+  } catch (err) {
+    logger.error('Error loading user metadata maps', { error: err.message });
+  }
+  
+  return { queryToMeta, titleToMeta };
+}
+
+async function getUserMetadata() {
+  if (!cachedUserMetadata) {
+    cachedUserMetadata = await loadUserMetadataMap();
+  }
+  return cachedUserMetadata;
+}
+
+function isPlaceholder(val) {
+  if (!val) return true;
+  const lower = val.toString().toLowerCase().trim();
+  return lower === '' || lower === '-' || lower === 'local cache' || lower === 'already downloaded' || lower === 'unknown (local cache)' || lower === 'unknown artist' || lower === 'youtube video';
+}
+
 const app = express();
 const port = 3001;
 
@@ -76,6 +254,7 @@ app.get('/api/downloads', async (req, res) => {
       logger.warn('Error reading metadata cache', { error: e.message });
     }
 
+    const userMetadataMap = await getUserMetadata();
     const list = [];
 
     for (const filePath of filePaths) {
@@ -94,12 +273,55 @@ app.get('/api/downloads', async (req, res) => {
         };
       }
       
+      let title = metadata.title;
+      let artist = metadata.artist;
+      let album = metadata.album;
+      let duration = metadata.duration;
+      
+      // Dynamic fallback search in user provided metadata
+      let userMeta = null;
+      if (query) {
+        userMeta = userMetadataMap.queryToMeta[normalizeStr(query)];
+      }
+      if (!userMeta) {
+        // Fallback: check query maps by filename
+        const cleanFilename = normalizeStr(path.basename(filePath, '.mp3'));
+        userMeta = userMetadataMap.titleToMeta[cleanFilename];
+      }
+      
+      if (userMeta) {
+        if (isPlaceholder(title)) title = userMeta.title;
+        if (isPlaceholder(artist)) artist = userMeta.artist;
+        if (isPlaceholder(album)) album = userMeta.album;
+        if (isPlaceholder(duration)) duration = userMeta.duration;
+      }
+      
+      // Basic formatting splits as a final fallback if still placeholder and query is present
+      if (isPlaceholder(title) && query) {
+        const parts = query.split(' - ');
+        if (parts.length >= 2) {
+          if (isPlaceholder(artist)) artist = parts[0].trim();
+          title = parts.slice(1).join(' - ').trim();
+        } else {
+          title = query;
+        }
+      }
+      
+      // Ensure defaults if still placeholders
+      if (isPlaceholder(title)) title = path.basename(filePath, '.mp3');
+      if (isPlaceholder(artist)) artist = 'Unknown Artist';
+      if (isPlaceholder(album)) album = 'Unknown Album';
+      if (isPlaceholder(duration)) duration = '-';
+
       list.push({
         name: relativePath,
         size: stat.size,
         mtime: stat.mtime,
         url: `/api/downloads/file/${encodeURIComponent(relativePath)}`,
-        ...metadata
+        title,
+        artist,
+        album,
+        duration
       });
     }
 
@@ -200,6 +422,7 @@ app.post('/api/upload', async (req, res) => {
     }
 
     await fs.writeFile(targetPath, fileBuffer);
+    cachedUserMetadata = null; // Invalidate cache so it is rebuilt on the next query
 
     logger.info('File uploaded successfully', { ip: req.ip, file: safeName });
     res.json({ success: true, message: `Successfully uploaded ${safeName}` });

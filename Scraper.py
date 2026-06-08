@@ -73,6 +73,7 @@ def parse_excel_file(filepath):
         first_row = [str(cell).strip().lower() if cell is not None else "" for cell in rows[0]]
         
         track_idx, artist_idx, playlist_idx, uri_idx = -1, -1, -1, -1
+        album_idx, duration_idx = -1, -1
         for idx, val in enumerate(first_row):
             if val in ('track', 'song', 'title', 'name', 'track name', 'song name'):
                 track_idx = idx
@@ -82,6 +83,10 @@ def parse_excel_file(filepath):
                 playlist_idx = idx
             elif val in ('uri', 'track uri', 'id', 'spotify uri'):
                 uri_idx = idx
+            elif val in ('album', 'album name'):
+                album_idx = idx
+            elif val in ('duration', 'duration (ms)', 'duration_ms', 'ms'):
+                duration_idx = idx
                 
         has_headers = (track_idx != -1 or artist_idx != -1)
         
@@ -94,13 +99,36 @@ def parse_excel_file(filepath):
                 artist = str(row[artist_idx]).strip() if artist_idx != -1 and artist_idx < len(row) and row[artist_idx] is not None else ""
                 playlist = str(row[playlist_idx]).strip() if playlist_idx != -1 and playlist_idx < len(row) and row[playlist_idx] is not None else ""
                 uri = str(row[uri_idx]).strip() if uri_idx != -1 and uri_idx < len(row) and row[uri_idx] is not None else ""
+                album = str(row[album_idx]).strip() if album_idx != -1 and album_idx < len(row) and row[album_idx] is not None else ""
+                
+                duration_ms = 0
+                if duration_idx != -1 and duration_idx < len(row) and row[duration_idx] is not None:
+                    try:
+                        duration_ms = int(row[duration_idx])
+                    except ValueError:
+                        pass
+                
+                duration_str = "-"
+                if duration_ms > 0:
+                    secs = duration_ms // 1000
+                    m = secs // 60
+                    s = secs % 60
+                    duration_str = f"{m}m {s}s"
                 
                 if track:
                     query = f"{track} {artist}".strip()
                     if not uri:
                         import hashlib
                         uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
-                    tracks.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist})
+                    tracks.append({
+                        "id": uri,
+                        "query": query,
+                        "track": track,
+                        "artist": artist,
+                        "playlist": playlist,
+                        "album": album,
+                        "duration": duration_str
+                    })
             else:
                 # No header: treat first cell as query, second as optional playlist
                 cells = [str(c).strip() if c is not None else "" for c in row]
@@ -185,6 +213,7 @@ def parse_spotify_data(json_directory, specific_file=None):
                         if has_header:
                             headers = [h.strip().lower() for h in next(reader)]
                             track_idx, artist_idx, playlist_idx, uri_idx = -1, -1, -1, -1
+                            album_idx, duration_idx = -1, -1
                             for idx, h in enumerate(headers):
                                 if h in ('track', 'song', 'title', 'name', 'track name', 'song name'):
                                     track_idx = idx
@@ -194,6 +223,10 @@ def parse_spotify_data(json_directory, specific_file=None):
                                     playlist_idx = idx
                                 elif h in ('uri', 'track uri', 'id', 'spotify uri'):
                                     uri_idx = idx
+                                elif h in ('album', 'album name'):
+                                    album_idx = idx
+                                elif h in ('duration', 'duration (ms)', 'duration_ms', 'ms'):
+                                    duration_idx = idx
                             
                             for row in reader:
                                 if not row:
@@ -202,6 +235,21 @@ def parse_spotify_data(json_directory, specific_file=None):
                                 artist = row[artist_idx].strip() if artist_idx != -1 and artist_idx < len(row) else ""
                                 playlist = row[playlist_idx].strip() if playlist_idx != -1 and playlist_idx < len(row) else ""
                                 uri = row[uri_idx].strip() if uri_idx != -1 and uri_idx < len(row) else ""
+                                album = row[album_idx].strip() if album_idx != -1 and album_idx < len(row) else ""
+                                
+                                duration_ms = 0
+                                if duration_idx != -1 and duration_idx < len(row):
+                                    try:
+                                        duration_ms = int(row[duration_idx])
+                                    except ValueError:
+                                        pass
+                                
+                                duration_str = "-"
+                                if duration_ms > 0:
+                                    secs = duration_ms // 1000
+                                    m = secs // 60
+                                    s = secs % 60
+                                    duration_str = f"{m}m {s}s"
                                 
                                 if track:
                                     query = f"{track} {artist}".strip()
@@ -210,7 +258,15 @@ def parse_spotify_data(json_directory, specific_file=None):
                                         if not uri:
                                             import hashlib
                                             uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
-                                        download_items.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist})
+                                        download_items.append({
+                                            "id": uri,
+                                            "query": query,
+                                            "track": track,
+                                            "artist": artist,
+                                            "playlist": playlist,
+                                            "album": album,
+                                            "duration": duration_str
+                                        })
                         else:
                             for row in reader:
                                 if not row:
@@ -259,6 +315,8 @@ def parse_spotify_data(json_directory, specific_file=None):
                     for stream in data:
                         track = stream.get("master_metadata_track_name")
                         artist = stream.get("master_metadata_album_artist_name")
+                        album = stream.get("master_metadata_album_album_name")
+                        ms = stream.get("ms_played", 0)
                         episode = stream.get("episode_name")
                         show = stream.get("episode_show_name")
                         
@@ -269,7 +327,23 @@ def parse_spotify_data(json_directory, specific_file=None):
                                 playlist_name = track_to_playlist.get((track.lower().strip(), artist.lower().strip()), "")
                                 import hashlib
                                 uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
-                                download_items.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist_name})
+                                
+                                duration_str = "-"
+                                if ms > 0:
+                                    secs = ms // 1000
+                                    m = secs // 60
+                                    s = secs % 60
+                                    duration_str = f"{m}m {s}s"
+                                
+                                download_items.append({
+                                    "id": uri,
+                                    "query": query,
+                                    "track": track,
+                                    "artist": artist,
+                                    "playlist": playlist_name,
+                                    "album": album if album else "",
+                                    "duration": duration_str
+                                })
                         elif episode and show:
                             query = f"{episode} {show}"
                             if query not in seen_queries:
@@ -462,8 +536,8 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
                     "id": item_dict.get("id", ""),
                     "query": item,
                     "file_path": existing_file,
-                    "youtube_title": os.path.splitext(os.path.basename(existing_file))[0],
-                    "youtube_artist": "Unknown (Local Cache)"
+                    "youtube_title": item_dict.get("track", os.path.splitext(os.path.basename(existing_file))[0]),
+                    "youtube_artist": item_dict.get("artist", "Unknown (Local Cache)")
                 }
                 save_cache(persistent_cache)
                 
@@ -472,10 +546,10 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
             print(f"  ✓ Already downloaded: {item} (found at downloads/{relative_path})")
             print(f"    Skipping download.")
             results[item] = {
-                'title': os.path.splitext(os.path.basename(existing_file))[0],
-                'artist': 'Local Cache',
-                'album': playlist_name if playlist_name else 'Already Downloaded',
-                'duration': '-',
+                'title': item_dict.get("track", os.path.splitext(os.path.basename(existing_file))[0]),
+                'artist': item_dict.get("artist", "Local Cache"),
+                'album': item_dict.get("album", playlist_name if playlist_name else 'Already Downloaded'),
+                'duration': item_dict.get("duration", "-"),
                 'type': 'track',
                 'url': 'local',
                 'status': 'downloaded',
