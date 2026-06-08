@@ -480,97 +480,101 @@ app.get('/api/sources', async (req, res) => {
 });
 
 // Trigger a scraper run
-app.post('/api/scrape/start', (req, res) => {
-  if (processStatus === 'running') {
-    return res.status(400).json({ error: 'A scrape process is already running.' });
-  }
+app.post('/api/scrape/start', (req, res, next) => {
+  try {
+    if (processStatus === 'running') {
+      return res.status(400).json({ error: 'A scrape process is already running.' });
+    }
 
-  const { script, limit, website, mode, query, sourceFile } = req.body;
-  
-  processType = script || 'api';
-  processLog = `Starting ${processType === 'selenium' ? 'YouTube-DL High Quality (320kbps)' : 'YouTube-DL Fast MP3 (192kbps)'}...\n`;
-  if (sourceFile) processLog += `Using data source: ${sourceFile}\n`;
-  processStatus = 'running';
+    const { script, limit, website, mode, query, sourceFile } = req.body;
+    
+    processType = script || 'api';
+    processLog = `Starting ${processType === 'selenium' ? 'YouTube-DL High Quality (320kbps)' : 'YouTube-DL Fast MP3 (192kbps)'}...\n`;
+    if (sourceFile) processLog += `Using data source: ${sourceFile}\n`;
+    processStatus = 'running';
 
-  const rootDir = path.join(__dirname, '../..');
-  let scriptPath;
-  let args = [];
+    const rootDir = path.join(__dirname, '../..');
+    let scriptPath;
+    let args = [];
 
-  // Sanitize sourceFile to prevent directory traversal
-  const safeSourceFile = sourceFile ? path.basename(sourceFile) : null;
+    // Sanitize sourceFile to prevent directory traversal
+    const safeSourceFile = sourceFile ? path.basename(sourceFile) : null;
 
-  if (processType === 'selenium') {
-    scriptPath = path.join(rootDir, 'qobuz_scrapper.py');
-    if (query) {
-      args = ['query', query];
+    if (processType === 'selenium') {
+      scriptPath = path.join(rootDir, 'qobuz_scrapper.py');
+      if (query) {
+        args = ['query', query];
+      } else {
+        args = [mode || 'albums', String(limit || 5)];
+        if (safeSourceFile) args.push(safeSourceFile);
+      }
     } else {
-      args = [mode || 'albums', String(limit || 5)];
-      if (safeSourceFile) args.push(safeSourceFile);
+      scriptPath = path.join(rootDir, 'Scraper.py');
+      if (query) {
+        args = ['query', query, website || 'https://qobuz.squid.wtf'];
+      } else {
+        args = [String(limit || 3), website || 'https://qobuz.squid.wtf'];
+        if (safeSourceFile) args.push(safeSourceFile);
+      }
     }
-  } else {
-    scriptPath = path.join(rootDir, 'Scraper.py');
-    if (query) {
-      args = ['query', query, website || 'https://qobuz.squid.wtf'];
-    } else {
-      args = [String(limit || 3), website || 'https://qobuz.squid.wtf'];
-      if (safeSourceFile) args.push(safeSourceFile);
+
+    processLog += `Command: python ${path.basename(scriptPath)} ${args.join(' ')}\n\n`;
+
+    // Spawn Python process
+    let pythonExecutable = 'python';
+    const venvWinPath = path.join(rootDir, '.venv', 'Scripts', 'python.exe');
+    const venvNixPath = path.join(rootDir, '.venv', 'bin', 'python');
+    
+    if (fs.existsSync(venvWinPath)) {
+      pythonExecutable = venvWinPath;
+    } else if (fs.existsSync(venvNixPath)) {
+      pythonExecutable = venvNixPath;
     }
+
+    currentProcess = spawn(pythonExecutable, [scriptPath, ...args], {
+      cwd: rootDir,
+      env: { 
+        ...process.env, 
+        PYTHONUNBUFFERED: '1',
+        PYTHONIOENCODING: 'utf-8',
+        PYTHONUTF8: '1'
+      }
+    });
+
+    currentProcess.stdout.on('data', (data) => {
+      processLog += data.toString();
+      // Cap log at 100,000 chars to avoid memory issues
+      if (processLog.length > 100000) {
+        processLog = processLog.slice(-100000);
+      }
+    });
+
+    currentProcess.stderr.on('data', (data) => {
+      processLog += `[ERROR] ${data.toString()}`;
+      if (processLog.length > 100000) {
+        processLog = processLog.slice(-100000);
+      }
+    });
+
+    currentProcess.on('error', (err) => {
+      logger.error('Failed to start scrape process', { error: err.message, scriptPath, args });
+      processLog += `\nFailed to start process: ${err.message}\n`;
+      processStatus = 'error';
+      currentProcess = null;
+    });
+
+    currentProcess.on('close', (code) => {
+      logger.info('Scrape process finished', { code, scriptPath });
+      processLog += `\nProcess exited with code ${code}\n`;
+      processStatus = code === 0 ? 'success' : 'error';
+      currentProcess = null;
+    });
+
+    logger.info('Scrape process started', { ip: req.ip, script: processType, query, limit, sourceFile: safeSourceFile });
+    res.json({ success: true, status: processStatus });
+  } catch (err) {
+    next(err);
   }
-
-  processLog += `Command: python ${path.basename(scriptPath)} ${args.join(' ')}\n\n`;
-
-  // Spawn Python process
-  let pythonExecutable = 'python';
-  const venvWinPath = path.join(rootDir, '.venv', 'Scripts', 'python.exe');
-  const venvNixPath = path.join(rootDir, '.venv', 'bin', 'python');
-  
-  if (fs.existsSync(venvWinPath)) {
-    pythonExecutable = venvWinPath;
-  } else if (fs.existsSync(venvNixPath)) {
-    pythonExecutable = venvNixPath;
-  }
-
-  currentProcess = spawn(pythonExecutable, [scriptPath, ...args], {
-    cwd: rootDir,
-    env: { 
-      ...process.env, 
-      PYTHONUNBUFFERED: '1',
-      PYTHONIOENCODING: 'utf-8',
-      PYTHONUTF8: '1'
-    }
-  });
-
-  currentProcess.stdout.on('data', (data) => {
-    processLog += data.toString();
-    // Cap log at 100,000 chars to avoid memory issues
-    if (processLog.length > 100000) {
-      processLog = processLog.slice(-100000);
-    }
-  });
-
-  currentProcess.stderr.on('data', (data) => {
-    processLog += `[ERROR] ${data.toString()}`;
-    if (processLog.length > 100000) {
-      processLog = processLog.slice(-100000);
-    }
-  });
-
-  currentProcess.on('error', (err) => {
-    logger.error('Failed to start scrape process', { error: err.message, scriptPath, args });
-    processLog += `\nFailed to start process: ${err.message}\n`;
-    processStatus = 'error';
-    currentProcess = null;
-  });
-
-  currentProcess.on('close', (code) => {
-    logger.info('Scrape process finished', { code, scriptPath });
-    processLog += `\nProcess exited with code ${code}\n`;
-    processStatus = code === 0 ? 'success' : 'error';
-    currentProcess = null;
-  });
-
-  logger.info('Scrape process started', { ip: req.ip, script: processType, query, limit, sourceFile: safeSourceFile });
-  res.json({ success: true, status: processStatus });
 });
 
 // Check status and logs of background scraper
@@ -595,6 +599,12 @@ app.post('/api/scrape/stop', (req, res) => {
   } else {
     res.status(400).json({ error: 'No scrape process running.' });
   }
+});
+
+// Global Error Handler Middleware (CWE-756 / CWE-248)
+app.use((err, req, res, next) => {
+  logger.error('Unhandled server error', { error: err.message, stack: err.stack, ip: req.ip, path: req.path });
+  res.status(500).json({ error: 'An unexpected server error occurred. Please try again later.' });
 });
 
 // Start Express Server

@@ -206,7 +206,7 @@ def parse_spotify_data(json_directory, specific_file=None):
                         has_header = False
                         try:
                             has_header = csv.Sniffer().has_header(sample)
-                        except Exception:
+                        except Exception:  # nosec B110 - Sniffer throws if header/delimiter is undetectable; fallback is safe
                             pass
                         
                         reader = csv.reader(f)
@@ -790,7 +790,9 @@ if __name__ == "__main__":
         try:
             with open('download_links.json', 'r', encoding='utf-8') as f:
                 existing_logs = json.load(f)
-        except Exception:
+        except json.JSONDecodeError:
+            print("Warning: download_links.json is malformed. Initializing empty log.")
+        except FileNotFoundError:
             pass
             
     existing_logs.update(download_links)
