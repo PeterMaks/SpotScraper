@@ -1,11 +1,71 @@
 {
   "version": 1,
   "skills": {
+    "authentication-failures": {
+      "source": "scholarly360/owasp-top10-web-skills",
+      "sourceType": "github",
+      "skillPath": "skills/authentication-failures/SKILL.md",
+      "computedHash": "e5e2a4ea8691bc832d6570ccdebadc8b8754900b47340759919080b73ed7ad2f"
+    },
+    "broken-access-control": {
+      "source": "scholarly360/owasp-top10-web-skills",
+      "sourceType": "github",
+      "skillPath": "skills/broken-access-control/SKILL.md",
+      "computedHash": "3587933ad2957c18e5f6a676861494af31343358bec79747f63c48c584ee00ce"
+    },
+    "cryptographic-failures": {
+      "source": "scholarly360/owasp-top10-web-skills",
+      "sourceType": "github",
+      "skillPath": "skills/cryptographic-failures/SKILL.md",
+      "computedHash": "c935420a54ea784bfde7f598a4742572f8ef5f669ddae7db0399dd8a0ac73eea"
+    },
     "huashu-design": {
       "source": "alchaincyf/huashu-design",
       "sourceType": "github",
       "skillPath": "SKILL.md",
       "computedHash": "964976e7e87d2beb25fbf74f06e694f5a27ca6c7a2f20307ada876d7b5047cdf"
+    },
+    "injection": {
+      "source": "scholarly360/owasp-top10-web-skills",
+      "sourceType": "github",
+      "skillPath": "skills/injection/SKILL.md",
+      "computedHash": "9c808ba6ffeff1ec090455f05703812bc63a139f71ee969525841d631588cf38"
+    },
+    "insecure-design": {
+      "source": "scholarly360/owasp-top10-web-skills",
+      "sourceType": "github",
+      "skillPath": "skills/insecure-design/SKILL.md",
+      "computedHash": "d8d22830b63bee2fa70840fb7aea2f03d36b57ebad7c5b5f96e398bda0f0974d"
+    },
+    "mishandling-exceptional-conditions": {
+      "source": "scholarly360/owasp-top10-web-skills",
+      "sourceType": "github",
+      "skillPath": "skills/mishandling-exceptional-conditions/SKILL.md",
+      "computedHash": "02f12d036c02409f66c548435a9a68aaaf6d5e14a969365924218f940d754713"
+    },
+    "security-logging-alerting-failures": {
+      "source": "scholarly360/owasp-top10-web-skills",
+      "sourceType": "github",
+      "skillPath": "skills/security-logging-alerting-failures/SKILL.md",
+      "computedHash": "e6ce8ea0936398d73de32f56eb232997f63aed195b72f57458af52ffd92a206b"
+    },
+    "security-misconfiguration": {
+      "source": "scholarly360/owasp-top10-web-skills",
+      "sourceType": "github",
+      "skillPath": "skills/security-misconfiguration/SKILL.md",
+      "computedHash": "6124d9571060992f1bb42338c1d9f1de08f42ebd16b179b13e30a9042ac518fe"
+    },
+    "software-data-integrity-failures": {
+      "source": "scholarly360/owasp-top10-web-skills",
+      "sourceType": "github",
+      "skillPath": "skills/software-data-integrity-failures/SKILL.md",
+      "computedHash": "3e094834c6e9268a4d5c44040c0b707e3adc1cf93675261633565caa3ad17b10"
+    },
+    "software-supply-chain-failures": {
+      "source": "scholarly360/owasp-top10-web-skills",
+      "sourceType": "github",
+      "skillPath": "skills/software-supply-chain-failures/SKILL.md",
+      "computedHash": "70cf49fd686f864f0cc465d3661f047e03ab86639f9edae105b51acaaf9f8fa9"
     }
   }
 }

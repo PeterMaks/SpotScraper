@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const { spawn } = require('child_process');
 const { aggregateStats } = require('./parser');
+const logger = require('./logger');
 
 const app = express();
 const port = 3001;
@@ -28,7 +29,7 @@ app.get('/api/stats', async (req, res) => {
     const stats = await aggregateStats();
     res.json(stats);
   } catch (err) {
-    console.error(err);
+    logger.error('Failed to aggregate stats', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to aggregate stats' });
   }
 });
@@ -71,7 +72,7 @@ app.get('/api/downloads', async (req, res) => {
     list.sort((a, b) => b.mtime - a.mtime);
     res.json({ files: list });
   } catch (err) {
-    console.error(err);
+    logger.error('Failed to read downloads directory', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to read downloads directory' });
   }
 });
@@ -82,14 +83,24 @@ app.delete('/api/downloads/file/*', async (req, res) => {
     const relativePath = req.params[0];
     const filePath = path.join(downloadsDir, relativePath);
 
-    if (await fs.pathExists(filePath)) {
-      await fs.remove(filePath);
+    // Resolve paths to absolute paths to prevent directory traversal
+    const resolvedPath = path.resolve(filePath);
+    const resolvedDownloadsDir = path.resolve(downloadsDir);
+
+    if (!resolvedPath.startsWith(resolvedDownloadsDir)) {
+      logger.warn('Directory traversal attempt detected', { ip: req.ip, path: relativePath });
+      return res.status(403).json({ error: 'Access denied: Directory traversal detected.' });
+    }
+
+    if (await fs.pathExists(resolvedPath)) {
+      await fs.remove(resolvedPath);
+      logger.info('File deleted', { ip: req.ip, file: relativePath });
       res.json({ success: true, message: `Deleted ${relativePath}` });
     } else {
       res.status(404).json({ error: 'File not found' });
     }
   } catch (err) {
-    console.error(err);
+    logger.error('Failed to delete file', { error: err.message, ip: req.ip, file: req.params[0] });
     res.status(500).json({ error: 'Failed to delete file' });
   }
 });
@@ -116,7 +127,7 @@ app.get('/api/logs', async (req, res) => {
       scrapeLog
     });
   } catch (err) {
-    console.error(err);
+    logger.error('Failed to load logs', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to load logs' });
   }
 });
@@ -134,15 +145,31 @@ app.post('/api/upload', async (req, res) => {
 
     // Clean up filename to prevent directory traversal
     const safeName = path.basename(fileName);
+
+    // Whitelist file extensions
+    const ext = path.extname(safeName).toLowerCase();
+    if (!['.json', '.csv', '.xlsx', '.xls'].includes(ext)) {
+      return res.status(400).json({ error: 'Unsupported file type. Only .json, .csv, .xlsx, and .xls files are allowed.' });
+    }
+
     const targetPath = path.join(spotifyDataDir, safeName);
 
     // Write file decoding from base64
     const fileBuffer = Buffer.from(content, 'base64');
+
+    // Restrict size to 10MB
+    const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
+    if (fileBuffer.length > MAX_UPLOAD_SIZE) {
+      logger.warn('File upload exceeded size limit', { ip: req.ip, file: safeName, size: fileBuffer.length });
+      return res.status(400).json({ error: 'File size exceeds the 10MB limit.' });
+    }
+
     await fs.writeFile(targetPath, fileBuffer);
 
+    logger.info('File uploaded successfully', { ip: req.ip, file: safeName });
     res.json({ success: true, message: `Successfully uploaded ${safeName}` });
   } catch (err) {
-    console.error(err);
+    logger.error('Failed to upload file', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to upload file.' });
   }
 });
@@ -158,7 +185,7 @@ app.get('/api/sources', async (req, res) => {
     const sources = files.filter(f => f.endsWith('.json') || f.endsWith('.csv') || f.endsWith('.xlsx') || f.endsWith('.xls'));
     res.json({ sources });
   } catch (err) {
-    console.error(err);
+    logger.error('Failed to read sources', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to read sources' });
   }
 });
@@ -180,13 +207,16 @@ app.post('/api/scrape/start', (req, res) => {
   let scriptPath;
   let args = [];
 
+  // Sanitize sourceFile to prevent directory traversal
+  const safeSourceFile = sourceFile ? path.basename(sourceFile) : null;
+
   if (processType === 'selenium') {
     scriptPath = path.join(rootDir, 'qobuz_scrapper.py');
     if (query) {
       args = ['query', query];
     } else {
       args = [mode || 'albums', String(limit || 5)];
-      if (sourceFile) args.push(sourceFile);
+      if (safeSourceFile) args.push(safeSourceFile);
     }
   } else {
     scriptPath = path.join(rootDir, 'Scraper.py');
@@ -194,7 +224,7 @@ app.post('/api/scrape/start', (req, res) => {
       args = ['query', query, website || 'https://qobuz.squid.wtf'];
     } else {
       args = [String(limit || 3), website || 'https://qobuz.squid.wtf'];
-      if (sourceFile) args.push(sourceFile);
+      if (safeSourceFile) args.push(safeSourceFile);
     }
   }
 
@@ -237,17 +267,20 @@ app.post('/api/scrape/start', (req, res) => {
   });
 
   currentProcess.on('error', (err) => {
+    logger.error('Failed to start scrape process', { error: err.message, scriptPath, args });
     processLog += `\nFailed to start process: ${err.message}\n`;
     processStatus = 'error';
     currentProcess = null;
   });
 
   currentProcess.on('close', (code) => {
+    logger.info('Scrape process finished', { code, scriptPath });
     processLog += `\nProcess exited with code ${code}\n`;
     processStatus = code === 0 ? 'success' : 'error';
     currentProcess = null;
   });
 
+  logger.info('Scrape process started', { ip: req.ip, script: processType, query, limit, sourceFile: safeSourceFile });
   res.json({ success: true, status: processStatus });
 });
 
@@ -268,6 +301,7 @@ app.post('/api/scrape/stop', (req, res) => {
     processStatus = 'idle';
     processLog += '\n--- Process terminated by user ---\n';
     currentProcess = null;
+    logger.info('Scrape process stopped by user', { ip: req.ip });
     res.json({ success: true, message: 'Scrape process cancelled.' });
   } else {
     res.status(400).json({ error: 'No scrape process running.' });
@@ -275,6 +309,6 @@ app.post('/api/scrape/stop', (req, res) => {
 });
 
 // Start Express Server
-app.listen(port, () => {
-  console.log(`Backend listening at http://localhost:${port}`);
+app.listen(port, '127.0.0.1', () => {
+  logger.info(`Backend listening at http://127.0.0.1:${port}`);
 });

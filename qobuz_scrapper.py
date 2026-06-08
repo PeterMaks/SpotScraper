@@ -12,6 +12,16 @@ import io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
+import logging
+from pythonjsonlogger import jsonlogger
+
+log_handler = logging.FileHandler('scrape_audit.log')
+formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s')
+log_handler.setFormatter(formatter)
+logger = logging.getLogger('scraper')
+logger.setLevel(logging.INFO)
+logger.addHandler(log_handler)
+
 CACHE_FILE = 'download_cache.json'
 
 def load_cache():
@@ -393,6 +403,9 @@ def scrape_qobuz_squid(download_list, search_mode, is_single_query=False):
         print(f"\nProcessing [{idx}/{total_items}]")
         print(f"Searching for: {item}")
         
+        # Log to structured audit log
+        logger.info("Processing scrape item", extra={"query": item, "index": idx, "total": total_items})
+        
         # Determine specific folder for download
         if playlist_name:
             safe_playlist = "".join(c for c in playlist_name if c.isalnum() or c in (' ', '_', '-')).strip()
@@ -555,6 +568,7 @@ def scrape_qobuz_squid(download_list, search_mode, is_single_query=False):
                         save_cache(persistent_cache)
                         
                     print(f"✅ Download Triggered for: {item}")
+                    logger.info("Download complete", extra={"query": item, "url": webpage_url})
                     results[item] = "Success"
                 else:
                     if is_single_query:
@@ -565,6 +579,7 @@ def scrape_qobuz_squid(download_list, search_mode, is_single_query=False):
                         results[item] = f"Skipped: Artist mismatch (target: {target_artist})"
         except Exception as e:
             print(f"❌ Failed processing '{item}'. Error: {str(e)}")
+            logger.error("Download failed", extra={"query": item, "error": str(e)})
             results[item] = f"Failed: {str(e)}"
             
     return results
@@ -631,8 +646,10 @@ if __name__ == "__main__":
     
     if is_single_query:
         print(f"\nRunning single search and download for query: {items_to_download[0]['query']}...")
+        logger.info("Scraper execution started (single query)", extra={"query": items_to_download[0]['query']})
     else:
         print(f"\nRunning test on first {test_limit} items...")
+        logger.info("Scraper execution started (batch)", extra={"limit": test_limit, "total_found": len(items_to_download)})
     
     scrape_log = scrape_qobuz_squid(items_to_download[:test_limit], search_mode=mode, is_single_query=is_single_query)
     
@@ -650,3 +667,4 @@ if __name__ == "__main__":
         json.dump(existing_logs, f, indent=4, ensure_ascii=False)
         
     print("\nScraping complete. Check the 'downloads' folder!")
+    logger.info("Scraper execution finished")
