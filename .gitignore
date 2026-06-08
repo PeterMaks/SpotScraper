@@ -7,3 +7,4 @@ docs
 .agents
 .venv
 recap_data.json
+bandit_crypto.json

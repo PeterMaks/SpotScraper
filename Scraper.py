@@ -99,7 +99,7 @@ def parse_excel_file(filepath):
                     query = f"{track} {artist}".strip()
                     if not uri:
                         import hashlib
-                        uri = "local:" + hashlib.md5(query.encode('utf-8')).hexdigest()[:12]
+                        uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                     tracks.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist})
             else:
                 # No header: treat first cell as query, second as optional playlist
@@ -110,13 +110,13 @@ def parse_excel_file(filepath):
                     playlist = cells[2] if len(cells) > 2 else ""
                     query = f"{track} {artist}".strip()
                     import hashlib
-                    uri = "local:" + hashlib.md5(query.encode('utf-8')).hexdigest()[:12]
+                    uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                     tracks.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist})
                 elif len(cells) == 1 and cells[0]:
                     track = cells[0]
                     query = track
                     import hashlib
-                    uri = "local:" + hashlib.md5(query.encode('utf-8')).hexdigest()[:12]
+                    uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                     tracks.append({"id": uri, "query": query, "track": track, "artist": "", "playlist": ""})
     except Exception as e:
         print(f"Error parsing Excel file {filepath}: {e}")
@@ -209,7 +209,7 @@ def parse_spotify_data(json_directory, specific_file=None):
                                         seen_queries.add(query)
                                         if not uri:
                                             import hashlib
-                                            uri = "local:" + hashlib.md5(query.encode('utf-8')).hexdigest()[:12]
+                                            uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                                         download_items.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist})
                         else:
                             for row in reader:
@@ -223,7 +223,7 @@ def parse_spotify_data(json_directory, specific_file=None):
                                     if query not in seen_queries:
                                         seen_queries.add(query)
                                         import hashlib
-                                        uri = "local:" + hashlib.md5(query.encode('utf-8')).hexdigest()[:12]
+                                        uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                                         download_items.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist})
                                 elif len(row) == 1:
                                     track = row[0].strip()
@@ -231,7 +231,7 @@ def parse_spotify_data(json_directory, specific_file=None):
                                     if query not in seen_queries:
                                         seen_queries.add(query)
                                         import hashlib
-                                        uri = "local:" + hashlib.md5(query.encode('utf-8')).hexdigest()[:12]
+                                        uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                                         download_items.append({"id": uri, "query": query, "track": track, "artist": "", "playlist": ""})
                 except Exception as e:
                     print(f"Error parsing CSV file {filename}: {e}")
@@ -268,14 +268,14 @@ def parse_spotify_data(json_directory, specific_file=None):
                                 seen_queries.add(query)
                                 playlist_name = track_to_playlist.get((track.lower().strip(), artist.lower().strip()), "")
                                 import hashlib
-                                uri = "local:" + hashlib.md5(query.encode('utf-8')).hexdigest()[:12]
+                                uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                                 download_items.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist_name})
                         elif episode and show:
                             query = f"{episode} {show}"
                             if query not in seen_queries:
                                 seen_queries.add(query)
                                 import hashlib
-                                uri = "local:" + hashlib.md5(query.encode('utf-8')).hexdigest()[:12]
+                                uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                                 download_items.append({"id": uri, "query": query, "track": episode, "artist": show, "playlist": "Podcasts"})
                                 
     return download_items

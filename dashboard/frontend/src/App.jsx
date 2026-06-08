@@ -27,6 +27,14 @@ function App() {
   const [sourceFiles, setSourceFiles] = useState([]);
   const [selectedSource, setSelectedSource] = useState('');
 
+  // Global Audio Player State
+  const [currentTrack, setCurrentTrack] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const audioRef = useRef(null);
+
   const handleFileUpload = async (event) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -98,6 +106,62 @@ function App() {
   const pollIntervalRef = useRef(null);
 
   const backendUrl = 'http://localhost:3001';
+
+  // --- Audio Player Handlers ---
+  useEffect(() => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.play().catch(e => console.error("Playback failed", e));
+      } else {
+        audioRef.current.pause();
+      }
+    }
+  }, [isPlaying, currentTrack]);
+
+  const handlePlayTrack = (trackFile) => {
+    if (currentTrack?.name === trackFile.name) {
+      setIsPlaying(!isPlaying);
+    } else {
+      setCurrentTrack(trackFile);
+      setIsPlaying(true);
+      setCurrentTime(0);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+    }
+  };
+
+  const handleSeek = (e) => {
+    const time = Number(e.target.value);
+    setCurrentTime(time);
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+    }
+  };
+
+  const handleVolumeChange = (e) => {
+    const vol = Number(e.target.value);
+    setVolume(vol);
+    if (audioRef.current) {
+      audioRef.current.volume = vol;
+    }
+  };
+  
+  const formatTime = (timeInSeconds) => {
+    if (isNaN(timeInSeconds)) return "0:00";
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   // Fetch all initial data
   useEffect(() => {
@@ -365,6 +429,21 @@ function App() {
 
   // SVG Icons
   const Icons = {
+    Play: () => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'translateX(2px)' }}><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    ),
+    Pause: () => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+    ),
+    SkipBack: () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+    ),
+    SkipForward: () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+    ),
+    Volume: () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+    ),
     Dashboard: () => (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
     ),
@@ -821,28 +900,30 @@ function App() {
                         <span>{new Date(file.mtime).toLocaleDateString()}</span>
                       </div>
                       
-                      {/* Audio Player */}
-                      <audio 
-                        controls 
-                        className="audio-player" 
-                        src={`${backendUrl}${file.url}`}
-                      />
-
-                      <div className="download-card-actions" style={{ marginTop: '12px' }}>
+                      <div className="download-card-actions" style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+                        <button 
+                          className="btn btn-primary"
+                          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '6px 12px', fontSize: '0.9rem' }}
+                          onClick={() => handlePlayTrack(file)}
+                        >
+                          {currentTrack?.name === file.name && isPlaying ? <Icons.Pause /> : <Icons.Play />} 
+                          {currentTrack?.name === file.name && isPlaying ? "Pause" : "Play"}
+                        </button>
                         <a 
                           href={`${backendUrl}${file.url}`} 
                           download={file.name}
                           className="btn btn-secondary"
-                          style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                          style={{ flex: 1, padding: '6px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >
-                          Save to Disk
+                          Save
                         </a>
                         <button 
                           className="btn btn-danger"
-                          style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                          style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                           onClick={() => handleDeleteFile(file.name)}
+                          title="Delete File"
                         >
-                          <Icons.Trash /> Delete
+                          <Icons.Trash />
                         </button>
                       </div>
                     </div>
@@ -973,6 +1054,68 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Global Audio Player */}
+      <audio 
+        ref={audioRef}
+        src={currentTrack ? `${backendUrl}${currentTrack.url}` : ''}
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleLoadedMetadata}
+        onEnded={() => setIsPlaying(false)}
+      />
+
+      {currentTrack && (
+        <div className={`global-player ${isPlaying ? 'playing' : ''}`}>
+          <div className="player-info">
+            <div className="player-art">
+              <Icons.Music />
+            </div>
+            <div className="player-track-details">
+              <div className="player-title" title={currentTrack.name}>
+                {currentTrack.name.replace('.mp3', '')}
+              </div>
+              <div className="player-artist">Downloaded Audio</div>
+            </div>
+          </div>
+          
+          <div className="player-center">
+            <div className="player-controls">
+              <button className="player-btn" onClick={() => {}} disabled><Icons.SkipBack /></button>
+              <button className="player-btn primary" onClick={() => setIsPlaying(!isPlaying)}>
+                {isPlaying ? <Icons.Pause /> : <Icons.Play />}
+              </button>
+              <button className="player-btn" onClick={() => {}} disabled><Icons.SkipForward /></button>
+            </div>
+            <div className="player-progress-container">
+              <span className="player-time">{formatTime(currentTime)}</span>
+              <input 
+                type="range" 
+                className="player-slider" 
+                min="0" 
+                max={duration || 0} 
+                value={currentTime} 
+                onChange={handleSeek}
+                style={{ '--progress': duration ? `${(currentTime / duration) * 100}%` : '0%' }}
+              />
+              <span className="player-time">{formatTime(duration)}</span>
+            </div>
+          </div>
+
+          <div className="player-right">
+            <div style={{ color: 'var(--text-muted)' }}><Icons.Volume /></div>
+            <input 
+              type="range" 
+              className="player-slider volume" 
+              min="0" 
+              max="1" 
+              step="0.01" 
+              value={volume} 
+              onChange={handleVolumeChange}
+              style={{ '--progress': `${volume * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
