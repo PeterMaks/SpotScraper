@@ -35,6 +35,8 @@ function App() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const audioRef = useRef(null);
+  const pendingPlayRef = useRef(false);
+  const timeUpdateRAF = useRef(null);
 
   const handleFileUpload = async (event) => {
     const files = event.target.files;
@@ -109,13 +111,26 @@ function App() {
   const backendUrl = 'http://localhost:3001';
 
   // --- Audio Player Handlers ---
+  // Helper: imperatively load and play a track on the audio element (bypasses React render cycle)
+  const loadAndPlay = (trackFile) => {
+    if (!audioRef.current) return;
+    audioRef.current.src = `${backendUrl}${trackFile.url}`;
+    audioRef.current.load();
+    pendingPlayRef.current = true;
+  };
+
+  // Sync play/pause only (for toggling on the SAME track)
   useEffect(() => {
-    if (audioRef.current) {
-      if (isPlaying) {
+    if (!audioRef.current || !currentTrack) return;
+    if (isPlaying) {
+      if (audioRef.current.readyState >= 2) {
         audioRef.current.play().catch(e => console.error("Playback failed", e));
       } else {
-        audioRef.current.pause();
+        pendingPlayRef.current = true;
       }
+    } else {
+      audioRef.current.pause();
+      pendingPlayRef.current = false;
     }
   }, [isPlaying, currentTrack]);
 
@@ -123,9 +138,12 @@ function App() {
     if (currentTrack?.name === trackFile.name) {
       setIsPlaying(!isPlaying);
     } else {
+      // Start loading audio IMMEDIATELY — don't wait for React render
+      loadAndPlay(trackFile);
       setCurrentTrack(trackFile);
-      setIsPlaying(true);
       setCurrentTime(0);
+      setDuration(0);
+      setIsPlaying(true);
     }
   };
 
@@ -142,9 +160,12 @@ function App() {
       }
     }
     const nextTrack = activeList[nextIndex];
+    // Start loading audio IMMEDIATELY
+    loadAndPlay(nextTrack);
     setCurrentTrack(nextTrack);
-    setIsPlaying(true);
     setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(true);
   };
 
   const handlePlayPrev = () => {
@@ -160,15 +181,23 @@ function App() {
       }
     }
     const prevTrack = activeList[prevIndex];
+    // Start loading audio IMMEDIATELY
+    loadAndPlay(prevTrack);
     setCurrentTrack(prevTrack);
-    setIsPlaying(true);
     setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(true);
   };
 
+  // Throttle time updates to avoid excessive re-renders
   const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
+    if (timeUpdateRAF.current) return;
+    timeUpdateRAF.current = requestAnimationFrame(() => {
+      if (audioRef.current) {
+        setCurrentTime(audioRef.current.currentTime);
+      }
+      timeUpdateRAF.current = null;
+    });
   };
 
   const handleLoadedMetadata = () => {
@@ -1153,7 +1182,13 @@ function App() {
       {/* Global Audio Player */}
       <audio 
         ref={audioRef}
-        src={currentTrack ? `${backendUrl}${currentTrack.url}` : ''}
+        preload="auto"
+        onCanPlay={() => {
+          if (pendingPlayRef.current) {
+            pendingPlayRef.current = false;
+            audioRef.current.play().catch(e => console.error("Playback failed", e));
+          }
+        }}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handlePlayNext}
