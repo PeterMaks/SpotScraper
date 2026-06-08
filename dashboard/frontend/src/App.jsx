@@ -29,6 +29,7 @@ function App() {
 
   // Global Audio Player State
   const [currentTrack, setCurrentTrack] = useState(null);
+  const [hoveredTrackIndex, setHoveredTrackIndex] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -429,6 +430,15 @@ function App() {
 
   // SVG Icons
   const Icons = {
+    Clock: () => (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    ),
+    MoreHorizontal: () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+    ),
+    Download: () => (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    ),
     Play: () => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'translateX(2px)' }}><polygon points="5 3 19 12 5 21 5 3"/></svg>
     ),
@@ -887,53 +897,102 @@ function App() {
                 <p>Scanning downloads folder...</p>
               </div>
             ) : (
-              <div className="downloads-grid">
-                {downloads
-                  .filter(file => file.name.toLowerCase().includes(downloadsSearch.toLowerCase()))
-                  .map((file) => (
-                    <div className="download-card" key={file.name}>
-                      <div className="download-card-title" title={file.name}>
-                        {file.name}
-                      </div>
-                      <div className="download-card-meta">
-                        <span>{formatBytes(file.size)}</span>
-                        <span>{new Date(file.mtime).toLocaleDateString()}</span>
-                      </div>
-                      
-                      <div className="download-card-actions" style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-                        <button 
-                          className="btn btn-primary"
-                          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '6px 12px', fontSize: '0.9rem' }}
-                          onClick={() => handlePlayTrack(file)}
-                        >
-                          {currentTrack?.name === file.name && isPlaying ? <Icons.Pause /> : <Icons.Play />} 
-                          {currentTrack?.name === file.name && isPlaying ? "Pause" : "Play"}
-                        </button>
-                        <a 
-                          href={`${backendUrl}${file.url}`} 
-                          download={file.name}
-                          className="btn btn-secondary"
-                          style={{ flex: 1, padding: '6px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          Save
-                        </a>
-                        <button 
-                          className="btn btn-danger"
-                          style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          onClick={() => handleDeleteFile(file.name)}
-                          title="Delete File"
-                        >
-                          <Icons.Trash />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+              <div className="downloads-list-container">
+                <div className="track-header">
+                  <div className="track-col-index">#</div>
+                  <div className="track-col-title">Title</div>
+                  <div className="track-col-album">Album</div>
+                  <div className="track-col-date">Date added</div>
+                  <div className="track-col-duration"><Icons.Clock /></div>
+                </div>
 
-                {downloads.length === 0 && (
-                  <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    No downloaded audio files found. Start the downloader to download files!
-                  </div>
-                )}
+                <div className="downloads-list">
+                  {downloads
+                    .filter(file => file.name.toLowerCase().includes(downloadsSearch.toLowerCase()))
+                    .map((file, index) => {
+                      // Fallback metadata parsing
+                      let title = file.title || file.name.replace('.mp3', '');
+                      let artist = file.artist || 'Unknown Artist';
+                      let album = file.album || '';
+                      
+                      if (!file.title) {
+                        const parts = title.split(' - ');
+                        if (parts.length >= 2) {
+                          artist = parts[0];
+                          title = parts.slice(1).join(' - ');
+                        }
+                      }
+
+                      const duration = file.duration && file.duration !== "-" ? file.duration : formatBytes(file.size);
+                      const isRowPlaying = currentTrack?.name === file.name;
+
+                      return (
+                        <div 
+                          className={`track-row ${isRowPlaying ? 'playing' : ''}`} 
+                          key={file.name}
+                          onMouseEnter={() => setHoveredTrackIndex(index)}
+                          onMouseLeave={() => setHoveredTrackIndex(null)}
+                          onDoubleClick={() => handlePlayTrack(file)}
+                          onClick={() => {
+                            // Single click selects/plays if not playing
+                            if (!isRowPlaying) handlePlayTrack(file);
+                          }}
+                        >
+                          <div className="track-col-index" onClick={(e) => { e.stopPropagation(); handlePlayTrack(file); }}>
+                            {hoveredTrackIndex === index ? (
+                              <button className="track-play-btn">
+                                {isRowPlaying && isPlaying ? <Icons.Pause /> : <Icons.Play />}
+                              </button>
+                            ) : isRowPlaying && isPlaying ? (
+                              <div className="playing-eq"><Icons.Music /></div>
+                            ) : (
+                              <span className="track-number">{index + 1}</span>
+                            )}
+                          </div>
+                          
+                          <div className="track-col-title">
+                            <div className="track-art">
+                              <Icons.Music />
+                            </div>
+                            <div className="track-info-stack">
+                              <span className={`track-name ${isRowPlaying ? 'active-text' : ''}`} title={title}>{title}</span>
+                              <span className="track-artist-name" title={artist}>{artist}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="track-col-album" title={album}>
+                            {album || '-'}
+                          </div>
+                          
+                          <div className="track-col-date">
+                            {new Date(file.mtime).toLocaleDateString()}
+                          </div>
+                          
+                          <div className="track-col-duration">
+                            <div className="track-info-stack" style={{ alignItems: 'flex-end', marginRight: '16px' }}>
+                              <span className="track-time" style={{ marginRight: 0 }}>{duration}</span>
+                              <span className="track-artist-name" style={{ marginTop: '4px' }}>{formatBytes(file.size)}</span>
+                            </div>
+                            
+                            <div className={`track-actions ${hoveredTrackIndex === index ? 'visible' : ''}`}>
+                              <a href={`${backendUrl}${file.url}`} download={file.name} title="Save to disk" onClick={(e) => e.stopPropagation()}>
+                                <Icons.Download />
+                              </a>
+                              <button onClick={(e) => { e.stopPropagation(); handleDeleteFile(file.name); }} className="btn-icon danger" title="Delete">
+                                <Icons.Trash />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                  {downloads.length === 0 && (
+                    <div className="empty-state" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      No downloaded audio files found. Start the downloader to download files!
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1081,7 +1140,7 @@ function App() {
           <div className="player-center">
             <div className="player-controls">
               <button className="player-btn" onClick={() => {}} disabled><Icons.SkipBack /></button>
-              <button className="player-btn primary" onClick={() => setIsPlaying(!isPlaying)}>
+              <button className="player-btn primary" onClick={() => currentTrack && setIsPlaying(!isPlaying)} disabled={!currentTrack}>
                 {isPlaying ? <Icons.Pause /> : <Icons.Play />}
               </button>
               <button className="player-btn" onClick={() => {}} disabled><Icons.SkipForward /></button>

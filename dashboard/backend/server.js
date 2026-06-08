@@ -55,16 +55,51 @@ app.get('/api/downloads', async (req, res) => {
   try {
     await fs.ensureDir(downloadsDir);
     const filePaths = await getFilesRecursive(downloadsDir);
+    
+    // Load metadata from root cache files
+    const rootDir = path.join(__dirname, '../..');
+    let cacheMap = {};
+    let metaMap = {};
+    try {
+      const cacheData = await fs.readJson(path.join(rootDir, 'download_cache.json')).catch(() => ({}));
+      const metaData = await fs.readJson(path.join(rootDir, 'download_links.json')).catch(() => ({}));
+      
+      // cacheData maps query string to { file_path: "C:\\...\\downloads\\Song.mp3" }
+      for (const [query, val] of Object.entries(cacheData)) {
+        if (val && val.file_path) {
+          const basename = path.basename(val.file_path);
+          cacheMap[basename] = query;
+        }
+      }
+      metaMap = metaData;
+    } catch (e) {
+      logger.warn('Error reading metadata cache', { error: e.message });
+    }
+
     const list = [];
 
     for (const filePath of filePaths) {
       const relativePath = path.relative(downloadsDir, filePath).replace(/\\/g, '/');
+      const basename = path.basename(filePath);
       const stat = await fs.stat(filePath);
+      
+      let metadata = {};
+      const query = cacheMap[basename];
+      if (query && metaMap[query]) {
+        metadata = {
+          title: metaMap[query].title,
+          artist: metaMap[query].artist,
+          album: metaMap[query].album,
+          duration: metaMap[query].duration
+        };
+      }
+      
       list.push({
         name: relativePath,
         size: stat.size,
         mtime: stat.mtime,
-        url: `/api/downloads/file/${encodeURIComponent(relativePath)}`
+        url: `/api/downloads/file/${encodeURIComponent(relativePath)}`,
+        ...metadata
       });
     }
 
