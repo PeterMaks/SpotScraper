@@ -31,6 +31,7 @@ scrape_log.json
 scrape_audit.log
 recap_data.json
 qobuz_links.json
+download_cache.json
 
 # =========================
 # Downloaded media (large binary files)
@@ -75,3 +76,4 @@ dashboard/skills-lock.json
 Thumbs.db
 Desktop.ini
 docs/superpowers/specs/2026-05-19-streaming-dashboard-design.md
+docs

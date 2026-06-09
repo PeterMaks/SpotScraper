@@ -108,7 +108,9 @@ function App() {
   const terminalEndRef = useRef(null);
   const pollIntervalRef = useRef(null);
 
-  const backendUrl = 'http://localhost:3001';
+  // In production (Docker/nginx), use relative URLs so requests go through the nginx proxy.
+  // In Vite dev mode, use the local backend directly (Vite proxy handles it).
+  const backendUrl = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
   // --- Audio Player Handlers ---
   // Helper: imperatively load and play a track on the audio element (bypasses React render cycle)

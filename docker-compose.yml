@@ -4,9 +4,15 @@
 # Usage:
 #   docker compose up -d              — Start all services
 #   docker compose up -d backend frontend  — Start only the dashboard
-#   docker compose run scraper python Scraper.py 10  — Run scraper with limit
+#   docker compose run --rm scraper python Scraper.py 10  — Run scraper
 #   docker compose logs -f backend    — Tail backend logs
 #   docker compose down               — Stop everything
+#
+# FIRST RUN: Ensure these JSON files exist at the project root
+# (they are auto-generated at runtime, but Docker needs them to exist):
+#   echo {} > download_cache.json
+#   echo {} > download_links.json
+#   echo {} > scrape_log.json
 
 services:
   # ──────────────────────────────────────────
@@ -36,27 +42,25 @@ services:
   # ──────────────────────────────────────────
   backend:
     build:
-      context: ./dashboard/backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: dashboard/backend/Dockerfile
     container_name: spotscraper-backend
     ports:
       - "3001:3001"
     volumes:
       - downloads_data:/downloads
       - spotify_data:/spotify_data
-      - ./download_cache.json:/download_cache.json:ro
-      - ./download_links.json:/download_links.json:ro
-      - ./scrape_log.json:/scrape_log.json:ro
+      - backend_data:/data
     environment:
       - NODE_ENV=production
-    depends_on: []
+      - HOST=0.0.0.0
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/stats"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3001/api/stats"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
   # ──────────────────────────────────────────
   # React/Vite Frontend (nginx)
@@ -77,4 +81,6 @@ volumes:
   downloads_data:
     driver: local
   spotify_data:
+    driver: local
+  backend_data:
     driver: local

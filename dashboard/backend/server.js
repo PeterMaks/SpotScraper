@@ -608,6 +608,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start Express Server
-app.listen(port, '127.0.0.1', () => {
-  logger.info(`Backend listening at http://127.0.0.1:${port}`);
+const host = process.env.HOST || '127.0.0.1';
+app.listen(port, host, () => {
+  logger.info(`Backend listening at http://${host}:${port}`);
 });
