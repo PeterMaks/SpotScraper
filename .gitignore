@@ -1,15 +1,77 @@
-downloads/Tarrus Riley - Love Salute.flac
-downloads/ 
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# =========================
+# Node / Dashboard
+# =========================
+node_modules/
 dashboard/node_modules/
 dashboard/backend/node_modules/
-dashboard/.agents
-docs
-.agents
-.venv
-recap_data.json
-bandit_crypto.json
-scrape_audit.log
-dashboard/backend/logs/audit.log
-scrape_audit.log
+dashboard/frontend/node_modules/
+dashboard/frontend/dist/
+dashboard/frontend/dist-ssr/
 
-dashboard/backend/logs/audit.log
+# =========================
+# Auto-generated runtime files
+# =========================
+download_cache.json
+download_links.json
+scrape_log.json
+scrape_audit.log
+recap_data.json
+qobuz_links.json
+
+# =========================
+# Downloaded media (large binary files)
+# =========================
+downloads/
+
+# =========================
+# User data (personal Spotify exports)
+# =========================
+spotify_data/
+
+# =========================
+# Security scan outputs
+# =========================
+bandit_*.json
+
+# =========================
+# Logs
+# =========================
+*.log
+dashboard/backend/logs/
+
+# =========================
+# Agents / IDE / Editor
+# =========================
+.agents/
+dashboard/.agents/
+skills-lock.json
+dashboard/skills-lock.json
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+
+# =========================
+# OS-specific
+# =========================
+Thumbs.db
+Desktop.ini
+docs/superpowers/specs/2026-05-19-streaming-dashboard-design.md

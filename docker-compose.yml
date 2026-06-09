@@ -1,0 +1,80 @@
+# ============================================
+# SpotScraper — Docker Compose Orchestration
+# ============================================
+# Usage:
+#   docker compose up -d              — Start all services
+#   docker compose up -d backend frontend  — Start only the dashboard
+#   docker compose run scraper python Scraper.py 10  — Run scraper with limit
+#   docker compose logs -f backend    — Tail backend logs
+#   docker compose down               — Stop everything
+
+services:
+  # ──────────────────────────────────────────
+  # Python Scraper (run on-demand)
+  # ──────────────────────────────────────────
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spotscraper-scraper
+    volumes:
+      - downloads_data:/app/downloads
+      - spotify_data:/app/spotify_data
+      - ./download_cache.json:/app/download_cache.json
+      - ./download_links.json:/app/download_links.json
+      - ./scrape_log.json:/app/scrape_log.json
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONIOENCODING=utf-8
+    # Not started by default — use `docker compose run scraper` to launch
+    profiles:
+      - scraper
+    restart: "no"
+
+  # ──────────────────────────────────────────
+  # Express.js API Backend
+  # ──────────────────────────────────────────
+  backend:
+    build:
+      context: ./dashboard/backend
+      dockerfile: Dockerfile
+    container_name: spotscraper-backend
+    ports:
+      - "3001:3001"
+    volumes:
+      - downloads_data:/downloads
+      - spotify_data:/spotify_data
+      - ./download_cache.json:/download_cache.json:ro
+      - ./download_links.json:/download_links.json:ro
+      - ./scrape_log.json:/scrape_log.json:ro
+    environment:
+      - NODE_ENV=production
+    depends_on: []
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ──────────────────────────────────────────
+  # React/Vite Frontend (nginx)
+  # ──────────────────────────────────────────
+  frontend:
+    build:
+      context: ./dashboard/frontend
+      dockerfile: Dockerfile
+    container_name: spotscraper-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  downloads_data:
+    driver: local
+  spotify_data:
+    driver: local

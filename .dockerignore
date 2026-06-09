@@ -1,0 +1,35 @@
+# Dependencies & environments
+.venv/
+node_modules/
+dashboard/node_modules/
+dashboard/backend/node_modules/
+dashboard/frontend/node_modules/
+
+# Git & IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+.agents/
+
+# Downloads & user data (mounted as volumes instead)
+downloads/
+spotify_data/
+
+# Runtime artifacts
+__pycache__/
+*.pyc
+*.log
+dashboard/backend/logs/
+dashboard/frontend/dist/
+
+# Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Docs & misc
+docs/
+*.md
+bandit_*.json
+skills-lock.json
