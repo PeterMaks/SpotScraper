@@ -48,9 +48,9 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - downloads_data:/downloads
-      - spotify_data:/spotify_data
-      - backend_data:/data
+      - downloads_data:/app/downloads
+      - spotify_data:/app/spotify_data
+      - backend_data:/app/data
     environment:
       - NODE_ENV=production
       - HOST=0.0.0.0
