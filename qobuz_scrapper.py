@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from datetime import datetime
 import csv
 import yt_dlp
 import imageio_ffmpeg
@@ -39,6 +40,25 @@ def save_cache(cache_dict):
             json.dump(cache_dict, f, indent=4, ensure_ascii=False)
     except Exception as e:
         print(f"Error saving cache: {e}")
+
+def emit_log(log_type, key, data):
+    import urllib.request
+    import json
+    
+    if isinstance(data, dict):
+        data['source'] = 'selenium'
+    
+    url = "http://localhost:3001/api/internal/log"
+    payload = json.dumps({
+        "type": log_type,
+        "key": key,
+        "data": data
+    }).encode('utf-8')
+    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+    try:
+        urllib.request.urlopen(req, timeout=2)
+    except Exception as e:
+        print(f"Error emitting log: {e}")
 
 def build_dir_cache(downloads_dir="downloads"):
     dir_cache = {}
@@ -484,6 +504,9 @@ def scrape_qobuz_squid(download_list, search_mode, is_single_query=False):
         playlist_name = item_dict["playlist"]
         target_artist = item_dict.get("artist", "")
         
+        start_time = time.time()
+        search_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
         print(f"\nProcessing [{idx}/{total_items}]")
         print(f"Searching for: {item}")
         
@@ -539,7 +562,19 @@ def scrape_qobuz_squid(download_list, search_mode, is_single_query=False):
             relative_path = os.path.relpath(existing_file, downloads_dir)
             print(f"  ✓ Already downloaded: {item} (found at downloads/{relative_path})")
             print(f"    Skipping download.")
-            results[item] = "Success"
+            results[item] = {
+                'title': item_dict.get('track', os.path.splitext(os.path.basename(existing_file))[0]),
+                'artist': item_dict.get('artist', 'Local Cache'),
+                'album': item_dict.get('album', playlist_name if playlist_name else 'Already Downloaded'),
+                'duration': '-',
+                'type': 'track',
+                'url': 'local',
+                'status': 'downloaded',
+                'search_time': search_time_str,
+                'download_time': '0.0s',
+                'download_completed': search_time_str
+            }
+            emit_log('downloadLinks', item, results[item])
             continue
             
         ydl_opts = {
@@ -651,20 +686,60 @@ def scrape_qobuz_squid(download_list, search_mode, is_single_query=False):
                         }
                         save_cache(persistent_cache)
                         
+                    end_time = time.time()
+                    actual_duration = end_time - start_time
+                    download_completed_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    yt_duration = selected_entry.get('duration', 0)
+                    mins, secs = divmod(int(yt_duration), 60)
+                    duration_str = f"{mins}m {secs}s" if yt_duration else '-'
+                    
                     print(f"✅ Download Triggered for: {item}")
-                    logger.info("Download complete", extra={"query": item, "url": webpage_url})
-                    results[item] = "Success"
+                    logger.info("Download complete", extra={"query": item, "url": webpage_url, "duration": actual_duration})
+                    results[item] = {
+                        'title': title,
+                        'artist': uploader,
+                        'album': playlist_name if playlist_name else 'YouTube Video',
+                        'duration': duration_str,
+                        'type': 'track',
+                        'url': webpage_url,
+                        'status': 'downloaded',
+                        'search_time': search_time_str,
+                        'download_time': f"{actual_duration:.1f}s",
+                        'download_completed': download_completed_str
+                    }
+                    emit_log('downloadLinks', item, results[item])
                 else:
                     if is_single_query:
                         print(f"❌ Failed processing '{item}'. No results found.")
-                        results[item] = "Failed: Not found"
+                        results[item] = {
+                            'title': item,
+                            'artist': target_artist or '-',
+                            'status': 'not_found',
+                            'search_time': search_time_str
+                        }
+                        emit_log('downloadLinks', item, results[item])
                     else:
                         print(f"❌ Skipped: Artist mismatch. checked up to 5 results for: {item} (target artist: '{target_artist}')")
-                        results[item] = f"Skipped: Artist mismatch (target: {target_artist})"
+                        results[item] = {
+                            'title': item,
+                            'artist': target_artist or '-',
+                            'status': 'skipped_mismatch',
+                            'search_time': search_time_str,
+                            'error': f"Artist mismatch (target: {target_artist})"
+                        }
+                        emit_log('downloadLinks', item, results[item])
         except Exception as e:
             print(f"❌ Failed processing '{item}'. Error: {str(e)}")
             logger.error("Download failed", extra={"query": item, "error": str(e)})
-            results[item] = f"Failed: {str(e)}"
+            results[item] = {
+                'title': item,
+                'artist': target_artist or '-',
+                'status': 'error',
+                'error': str(e),
+                'search_time': search_time_str
+            }
+            emit_log('downloadLinks', item, results[item])
             
     return results
 
@@ -737,20 +812,5 @@ if __name__ == "__main__":
     
     scrape_log = scrape_qobuz_squid(items_to_download[:test_limit], search_mode=mode, is_single_query=is_single_query)
     
-    existing_logs = {}
-    if os.path.exists('scrape_log.json'):
-        try:
-            with open('scrape_log.json', 'r', encoding='utf-8') as f:
-                existing_logs = json.load(f)
-        except json.JSONDecodeError:
-            print("Warning: scrape_log.json is malformed. Initializing empty log.")
-        except FileNotFoundError:
-            pass
-            
-    existing_logs.update(scrape_log)
-    
-    with open('scrape_log.json', 'w', encoding='utf-8') as f:
-        json.dump(existing_logs, f, indent=4, ensure_ascii=False)
-        
     print("\nScraping complete. Check the 'downloads' folder!")
     logger.info("Scraper execution finished")

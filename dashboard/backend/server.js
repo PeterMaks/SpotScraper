@@ -7,6 +7,27 @@ const { aggregateStats } = require('./parser');
 const logger = require('./logger');
 const archiver = require('archiver');
 
+// --- Global Log State ---
+const rootDir = path.join(__dirname, '../..');
+const downloadLinksPath = path.join(rootDir, 'download_links.json');
+const scrapeLogPath = path.join(rootDir, 'scrape_log.json');
+
+let inMemoryDownloadLinks = {};
+let inMemoryScrapeLog = {};
+
+(async () => {
+  try {
+    if (await fs.pathExists(downloadLinksPath)) {
+      inMemoryDownloadLinks = await fs.readJson(downloadLinksPath);
+    }
+    if (await fs.pathExists(scrapeLogPath)) {
+      inMemoryScrapeLog = await fs.readJson(scrapeLogPath);
+    }
+  } catch (err) {
+    logger.error('Failed to initialize logs from disk', { error: err.message });
+  }
+})();
+
 // --- User Metadata Fallback Logic ---
 
 function normalizeStr(str) {
@@ -208,7 +229,7 @@ app.use(cors({
     }
   },
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']
 }));
 
 // Set HTTP Security Headers manual middleware
@@ -475,27 +496,126 @@ app.post('/api/downloads/zip', async (req, res) => {
 // Read previous scrape logs
 app.get('/api/logs', async (req, res) => {
   try {
-    const rootDir = path.join(__dirname, '../..');
-    const downloadLinksPath = path.join(rootDir, 'download_links.json');
-    const scrapeLogPath = path.join(rootDir, 'scrape_log.json');
-
-    let downloadLinks = {};
-    let scrapeLog = {};
-
-    if (await fs.pathExists(downloadLinksPath)) {
-      downloadLinks = await fs.readJson(downloadLinksPath);
-    }
-    if (await fs.pathExists(scrapeLogPath)) {
-      scrapeLog = await fs.readJson(scrapeLogPath);
-    }
-
     res.json({
-      downloadLinks,
-      scrapeLog
+      downloadLinks: inMemoryDownloadLinks,
+      scrapeLog: inMemoryScrapeLog
     });
   } catch (err) {
     logger.error('Failed to load logs', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to load logs' });
+  }
+});
+
+// Internal Webhook for Scrapers
+app.post('/api/internal/log', express.json(), async (req, res) => {
+  try {
+    const { type, key, data } = req.body;
+    if (type === 'downloadLinks') {
+      inMemoryDownloadLinks[key] = data;
+      fs.writeJson(downloadLinksPath, inMemoryDownloadLinks, { spaces: 4 }).catch(err => {
+        logger.error('Failed to flush downloadLinks to disk', { error: err.message });
+      });
+    } else if (type === 'scrapeLog') {
+      inMemoryScrapeLog[key] = data;
+      fs.writeJson(scrapeLogPath, inMemoryScrapeLog, { spaces: 4 }).catch(err => {
+        logger.error('Failed to flush scrapeLog to disk', { error: err.message });
+      });
+    }
+    res.status(200).send('OK');
+  } catch (err) {
+    logger.error('Internal log error', { error: err.message });
+    res.status(500).send('Error');
+  }
+});
+
+// Helper to archive log entries
+async function archiveLogs(downloadLinksKeys, scrapeLogKeys, allDownloadLinks, allScrapeLog) {
+  const rootDir = path.join(__dirname, '../..');
+  const archiveLinksPath = path.join(rootDir, 'archive_download_links.json');
+  const archiveScrapePath = path.join(rootDir, 'archive_scrape_log.json');
+  
+  if (downloadLinksKeys.length > 0) {
+    let archiveLinks = {};
+    if (await fs.pathExists(archiveLinksPath)) {
+      archiveLinks = await fs.readJson(archiveLinksPath);
+    }
+    for (const key of downloadLinksKeys) {
+      if (allDownloadLinks[key] !== undefined) {
+        archiveLinks[key] = allDownloadLinks[key];
+      }
+    }
+    await fs.writeJson(archiveLinksPath, archiveLinks, { spaces: 2 });
+  }
+
+  if (scrapeLogKeys.length > 0) {
+    let archiveScrape = {};
+    if (await fs.pathExists(archiveScrapePath)) {
+      archiveScrape = await fs.readJson(archiveScrapePath);
+    }
+    for (const key of scrapeLogKeys) {
+      if (allScrapeLog[key] !== undefined) {
+        archiveScrape[key] = allScrapeLog[key];
+      }
+    }
+    await fs.writeJson(archiveScrapePath, archiveScrape, { spaces: 2 });
+  }
+}
+
+// Batch delete specific logs
+app.post('/api/logs/delete-batch', async (req, res) => {
+  try {
+    const { queries } = req.body;
+    if (!Array.isArray(queries)) {
+      return res.status(400).json({ error: 'Queries array required' });
+    }
+
+    const dlKeysToArchive = [];
+    const slKeysToArchive = [];
+
+    for (const q of queries) {
+      if (inMemoryDownloadLinks[q] !== undefined) {
+        dlKeysToArchive.push(q);
+      }
+      if (inMemoryScrapeLog[q] !== undefined) {
+        slKeysToArchive.push(q);
+      }
+    }
+
+    // Archive before deleting
+    await archiveLogs(dlKeysToArchive, slKeysToArchive, inMemoryDownloadLinks, inMemoryScrapeLog);
+
+    // Delete keys
+    for (const q of dlKeysToArchive) delete inMemoryDownloadLinks[q];
+    for (const q of slKeysToArchive) delete inMemoryScrapeLog[q];
+
+    await fs.writeJson(downloadLinksPath, inMemoryDownloadLinks, { spaces: 4 });
+    await fs.writeJson(scrapeLogPath, inMemoryScrapeLog, { spaces: 4 });
+
+    res.json({ success: true, message: `Deleted ${queries.length} logs.` });
+  } catch (err) {
+    logger.error('Failed to batch delete logs', { error: err.message, ip: req.ip });
+    res.status(500).json({ error: 'Failed to batch delete logs' });
+  }
+});
+
+// Clear all logs
+app.post('/api/logs/clear', async (req, res) => {
+  try {
+    const dlKeysToArchive = Object.keys(inMemoryDownloadLinks);
+    const slKeysToArchive = Object.keys(inMemoryScrapeLog);
+
+    await archiveLogs(dlKeysToArchive, slKeysToArchive, inMemoryDownloadLinks, inMemoryScrapeLog);
+
+    inMemoryDownloadLinks = {};
+    inMemoryScrapeLog = {};
+
+    await fs.writeJson(downloadLinksPath, inMemoryDownloadLinks, { spaces: 4 });
+    await fs.writeJson(scrapeLogPath, inMemoryScrapeLog, { spaces: 4 });
+
+    res.json({ success: true, message: 'All logs cleared and archived.' });
+  } catch (err) {
+    logger.error('Failed to clear logs', { error: err.message, ip: req.ip });
+    res.status(500).json({ error: 'Failed to clear logs' });
   }
 });
 

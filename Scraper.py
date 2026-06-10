@@ -43,6 +43,25 @@ def save_cache(cache_dict):
     except Exception as e:
         print(f"Error saving cache: {e}")
 
+def emit_log(log_type, key, data):
+    import urllib.request
+    import json
+    
+    if isinstance(data, dict):
+        data['source'] = 'api'
+    
+    url = "http://localhost:3001/api/internal/log"
+    payload = json.dumps({
+        "type": log_type,
+        "key": key,
+        "data": data
+    }).encode('utf-8')
+    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+    try:
+        urllib.request.urlopen(req, timeout=2)
+    except Exception as e:
+        print(f"Error emitting log: {e}")
+
 def build_dir_cache(downloads_dir="downloads"):
     dir_cache = {}
     if not os.path.exists(downloads_dir):
@@ -562,6 +581,7 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
                 'download_time': '0.0s',
                 'download_completed': search_time_str
             }
+            emit_log('downloadLinks', item, results[item])
             continue
             
         ydl_opts = {
@@ -719,6 +739,7 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
                         'download_time': f"{actual_duration:.1f}s",
                         'download_completed': download_completed_str
                     }
+                    emit_log('downloadLinks', item, results[item])
                 else:
                     if is_single_query:
                         print(f"  ✗ No results found for: {item}")
@@ -727,6 +748,7 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
                             'status': 'not_found',
                             'search_time': search_time_str
                         }
+                        emit_log('downloadLinks', item, results[item])
                     else:
                         print(f"  ✗ Skipped: Artist mismatch. checked up to 5 results for: {item} (target artist: '{target_artist}')")
                         results[item] = {
@@ -735,6 +757,7 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
                             'search_time': search_time_str,
                             'error': f"Artist mismatch (target: {target_artist})"
                         }
+                        emit_log('downloadLinks', item, results[item])
                         
         except Exception as e:
             print(f"  ✗ Error searching/downloading: {item} - {str(e)}")
@@ -746,6 +769,7 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
                 'error': str(e),
                 'search_time': search_time_str
             }
+            emit_log('downloadLinks', item, results[item])
             
     return results
 
@@ -804,21 +828,5 @@ if __name__ == "__main__":
     
     download_links = search_and_scrape(items_to_download[:test_limit], target_website, is_single_query=is_single_query)
     
-    # Save results to a file
-    existing_logs = {}
-    if os.path.exists('download_links.json'):
-        try:
-            with open('download_links.json', 'r', encoding='utf-8') as f:
-                existing_logs = json.load(f)
-        except json.JSONDecodeError:
-            print("Warning: download_links.json is malformed. Initializing empty log.")
-        except FileNotFoundError:
-            pass
-            
-    existing_logs.update(download_links)
-    
-    with open('download_links.json', 'w', encoding='utf-8') as f:
-        json.dump(existing_logs, f, indent=4, ensure_ascii=False)
-        
     print("\nDownload complete. Check the 'downloads' folder!")
     logger.info("Scraper execution finished")

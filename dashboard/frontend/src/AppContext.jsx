@@ -1,3 +1,4 @@
+// @refresh reset
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 
 const AppContext = createContext();
@@ -57,6 +58,7 @@ export const AppProvider = ({ children }) => {
   const [loadingLogs, setLoadingLogs] = useState(true);
 
   const pollIntervalRef = useRef(null);
+  const pollCounterRef = useRef(0);
 
   const backendUrl = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
@@ -224,7 +226,7 @@ export const AppProvider = ({ children }) => {
   const fetchDownloads = async () => {
     setLoadingDownloads(true);
     try {
-      const res = await fetch(`${backendUrl}/api/downloads`);
+      const res = await fetch(`${backendUrl}/api/downloads?_t=${Date.now()}`);
       const data = await res.json();
       setDownloads(data.files || []);
     } catch (err) {
@@ -235,9 +237,14 @@ export const AppProvider = ({ children }) => {
   };
 
   const fetchLogs = async () => {
-    setLoadingLogs(true);
     try {
-      const res = await fetch(`${backendUrl}/api/logs`);
+      setLoadingLogs(true);
+      const res = await fetch(`${backendUrl}/api/logs?_t=${Date.now()}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      });
       const data = await res.json();
       setLogs(data);
     } catch (err) {
@@ -266,10 +273,17 @@ export const AppProvider = ({ children }) => {
       setScraperStatus(data.status);
       setScraperOutput(data.output);
       
+      pollCounterRef.current += 1;
+      
       if (data.status === 'success' || data.status === 'error') {
         fetchStats();
         fetchDownloads();
         fetchLogs();
+      } else if (data.status === 'running') {
+        if (pollCounterRef.current % 2 === 0) {
+          fetchDownloads();
+          fetchLogs();
+        }
       }
     } catch (err) {
       console.error('Error polling status:', err);
