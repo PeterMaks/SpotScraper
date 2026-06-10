@@ -16,9 +16,6 @@ build/
 # Node / Dashboard
 # =========================
 node_modules/
-dashboard/node_modules/
-dashboard/backend/node_modules/
-dashboard/frontend/node_modules/
 dashboard/frontend/dist/
 dashboard/frontend/dist-ssr/
 
@@ -31,7 +28,6 @@ scrape_log.json
 scrape_audit.log
 recap_data.json
 qobuz_links.json
-download_cache.json
 
 # =========================
 # Downloaded media (large binary files)
@@ -58,9 +54,7 @@ dashboard/backend/logs/
 # Agents / IDE / Editor
 # =========================
 .agents/
-dashboard/.agents/
 skills-lock.json
-dashboard/skills-lock.json
 .vscode/
 .idea/
 *.suo
@@ -75,7 +69,3 @@ dashboard/skills-lock.json
 # =========================
 Thumbs.db
 Desktop.ini
-docs/superpowers/specs/2026-05-19-streaming-dashboard-design.md
-docs
-dashboard/backend/logs/audit.log
-download_links.json

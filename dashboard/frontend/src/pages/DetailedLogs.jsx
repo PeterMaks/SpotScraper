@@ -104,7 +104,7 @@ export default function DetailedLogs() {
     if (logsFilter === 'DOWNLOADED' && item.status !== 'downloaded') return false;
     if (logsFilter === 'NOT_FOUND' && item.status !== 'not_found') return false;
     if (logsFilter === 'ERROR' && item.status !== 'error' && item.status !== 'api_error' && item.status !== 'timeout') return false;
-    if (logsFilter === 'SKIPPED/MISMATCH/UNKNOWN' && !['skipped', 'mismatch', 'unknown'].includes(item.status)) return false;
+    if (logsFilter === 'SKIPPED/MISMATCH/UNKNOWN' && !['skipped', 'mismatch', 'skipped_mismatch', 'unknown'].includes(item.status)) return false;
 
     const term = logsSearch.toLowerCase();
     return (
