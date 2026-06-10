@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
+import AcquireDataGuide from './AcquireDataGuide';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -544,6 +545,9 @@ function App() {
     ),
     Cancel: () => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+    ),
+    Acquire: () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
     )
   };
 
@@ -583,6 +587,12 @@ function App() {
             onClick={() => setActiveTab('logs')}
           >
             <Icons.Logs /> Detailed Logs
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'acquire' ? 'active' : ''}`}
+            onClick={() => setActiveTab('acquire')}
+          >
+            <Icons.Acquire /> Data Guide
           </button>
         </nav>
 
@@ -1177,6 +1187,13 @@ function App() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Tab: Acquire Data Guide */}
+        {activeTab === 'acquire' && (
+          <div className="tab-content animate-fade-in" style={{ padding: 0 }}>
+            <AcquireDataGuide />
           </div>
         )}
       </main>
