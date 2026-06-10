@@ -77,3 +77,4 @@ Thumbs.db
 Desktop.ini
 docs/superpowers/specs/2026-05-19-streaming-dashboard-design.md
 docs
+dashboard/backend/logs/audit.log
