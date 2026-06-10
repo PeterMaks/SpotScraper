@@ -644,11 +644,11 @@ app.post('/api/upload', async (req, res) => {
     // Write file decoding from base64
     const fileBuffer = Buffer.from(content, 'base64');
 
-    // Restrict size to 10MB
-    const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
+    // Restrict size to 50MB
+    const MAX_UPLOAD_SIZE = 50 * 1024 * 1024;
     if (fileBuffer.length > MAX_UPLOAD_SIZE) {
       logger.warn('File upload exceeded size limit', { ip: req.ip, file: safeName, size: fileBuffer.length });
-      return res.status(400).json({ error: 'File size exceeds the 10MB limit.' });
+      return res.status(400).json({ error: 'File size exceeds the 50MB limit.' });
     }
 
     await fs.writeFile(targetPath, fileBuffer);
