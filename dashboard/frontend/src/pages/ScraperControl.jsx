@@ -1,6 +1,53 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useAppContext } from '../AppContext';
 import Icons from '../components/Icons';
+
+// Helper to parse the raw text output into structured progress
+const parseProgress = (output) => {
+  let current = 0;
+  let total = 0;
+  let currentTrack = '';
+  let currentAction = 'Idle';
+  let percent = 0;
+  let eta = '--:--';
+  let hasError = false;
+
+  if (!output) return { current, total, currentTrack, currentAction, percent, eta, hasError };
+
+  const lines = output.split('\n');
+  for (let line of lines) {
+    const progMatch = line.match(/Processing \[(\d+)\/(\d+)\]/);
+    if (progMatch) {
+      current = parseInt(progMatch[1], 10);
+      total = parseInt(progMatch[2], 10);
+    }
+    if (line.includes('🔍 Searching for:')) {
+      currentTrack = line.split('🔍 Searching for:')[1].trim();
+      currentAction = 'Searching...';
+      percent = 0;
+    }
+    if (line.includes('⬇️ Starting download')) {
+      currentAction = 'Downloading...';
+    }
+    if (line.includes('✅ Download complete')) {
+      currentAction = 'Completed';
+      percent = 100;
+    }
+    if (line.includes('✗ Error') || line.includes('✗ Skipped') || line.includes('Failed')) {
+      currentAction = 'Failed / Skipped';
+      hasError = true;
+    }
+    if (line.includes('[download]') && line.includes('%')) {
+      const match = line.match(/(\d+\.?\d*)%/);
+      if (match) percent = parseFloat(match[1]);
+      
+      const etaMatch = line.match(/ETA (\d+:\d+)/);
+      if (etaMatch) eta = etaMatch[1];
+    }
+  }
+
+  return { current, total, currentTrack, currentAction, percent, eta, hasError };
+};
 
 export default function ScraperControl() {
   const {
@@ -17,12 +64,13 @@ export default function ScraperControl() {
   } = useAppContext();
 
   const terminalEndRef = useRef(null);
+  const [showRawLogs, setShowRawLogs] = useState(false);
 
   useEffect(() => {
     if (terminalEndRef.current) {
       terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [scraperOutput]);
+  }, [scraperOutput, showRawLogs]);
 
   const handleStartScrape = async (e) => {
     e.preventDefault();
@@ -65,6 +113,31 @@ export default function ScraperControl() {
       console.error('Error stopping scrape:', err);
     }
   };
+
+  const { current, total, currentTrack, currentAction, percent, eta, hasError } = useMemo(() => parseProgress(scraperOutput), [scraperOutput]);
+  
+  // Calculate total overall percentage
+  const itemWeight = total > 0 ? 1 / total : 0;
+  let overallProgress = total > 0 ? ((Math.max(0, current - 1) / total) + (percent / 100 * itemWeight)) * 100 : 0;
+  if (overallProgress > 100) overallProgress = 100;
+  if (current === 0) overallProgress = 0;
+  
+  let headerTitle = 'Downloading Media...';
+  let displayAction = currentAction;
+  
+  if (scraperStatus === 'error' || hasError) {
+    headerTitle = 'Scraper Error';
+    displayAction = 'Failed / Error';
+  } else if (scraperStatus === 'success') {
+    headerTitle = 'Batch Download Complete';
+    overallProgress = 100;
+    displayAction = 'Completed';
+  } else if (scraperStatus !== 'running') {
+    if (scraperOutput) {
+      headerTitle = 'Scraper Stopped / Idle';
+      displayAction = 'Aborted / Idle';
+    }
+  }
 
   return (
     <div className="tab-content animate-fade-in">
@@ -147,33 +220,40 @@ export default function ScraperControl() {
           </form>
         </div>
 
-        {/* Terminal Panel */}
-        <div className="terminal-panel">
-          <div className="terminal-header">
-            <div className="terminal-controls">
-              <div className="terminal-dot red"></div>
-              <div className="terminal-dot yellow"></div>
-              <div className="terminal-dot green"></div>
-            </div>
-            <span className="terminal-title">console_output.log</span>
-            <div style={{ width: '52px' }}></div>
-          </div>
-          <div className="terminal-screen">
-            {scraperOutput ? (
-              scraperOutput.split('\n').map((line, idx) => (
-                <div key={idx} style={{ 
-                  color: line.includes('[ERROR]') ? '#f75c6c' : line.includes('✅') || line.includes('✓') ? '#24d262' : '#9fa4b8',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all'
-                }}>
-                  {line}
+        {/* Progress Panel */}
+        <div className="progress-panel">
+          {scraperStatus === 'running' || scraperOutput ? (
+            <div className="progress-card animate-fade-in">
+              <div className="progress-header">
+                <h3>{headerTitle}</h3>
+                <span className="progress-badge">{total > 0 ? `Track ${current} of ${total}` : 'Initializing...'}</span>
+              </div>
+              
+              <div className="progress-track-info">
+                <div className="track-name">{currentTrack || 'Preparing connection...'}</div>
+                <div className="track-status" style={{ color: (scraperStatus === 'error' || hasError) ? 'var(--danger-color)' : 'var(--text-muted)' }}>
+                  {displayAction} {eta !== '--:--' && scraperStatus === 'running' && displayAction === 'Downloading...' ? `(ETA: ${eta})` : ''}
                 </div>
-              ))
-            ) : (
-              <div style={{ color: '#555', fontStyle: 'italic' }}>Terminal idle. Start a scrape process to view real-time log outputs...</div>
-            )}
-            <div ref={terminalEndRef}></div>
-          </div>
+              </div>
+
+              <div className="progress-bar-container">
+                <div className="progress-bar-fill" style={{ width: `${overallProgress}%` }}>
+                  <div className="progress-bar-glow"></div>
+                </div>
+              </div>
+              
+              <div className="progress-footer">
+                <span>{overallProgress.toFixed(1)}% Completed</span>
+                <span>{percent > 0 && percent < 100 ? `Current Track: ${percent.toFixed(1)}%` : ''}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="progress-empty">
+               <Icons.Download className="empty-icon" />
+               <p>Ready to Download</p>
+               <span>Configure settings and click start to begin the batch process.</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -5,6 +5,7 @@ const fs = require('fs-extra');
 const { spawn } = require('child_process');
 const { aggregateStats } = require('./parser');
 const logger = require('./logger');
+const archiver = require('archiver');
 
 // --- User Metadata Fallback Logic ---
 
@@ -390,6 +391,84 @@ app.delete('/api/downloads/file/*', async (req, res) => {
   } catch (err) {
     logger.error('Failed to delete file', { error: err.message, ip: req.ip, file: req.params[0] });
     res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
+// Batch delete
+app.post('/api/downloads/delete-batch', async (req, res) => {
+  try {
+    const { files } = req.body;
+    if (!Array.isArray(files)) {
+      return res.status(400).json({ error: 'files must be an array' });
+    }
+
+    const deleted = [];
+    const errors = [];
+
+    const resolvedDownloadsDir = path.resolve(downloadsDir);
+
+    for (const relativePath of files) {
+      const filePath = path.join(downloadsDir, relativePath);
+      const resolvedPath = path.resolve(filePath);
+
+      if (!resolvedPath.startsWith(resolvedDownloadsDir)) {
+        errors.push({ file: relativePath, error: 'Directory traversal detected' });
+        continue;
+      }
+
+      if (await fs.pathExists(resolvedPath)) {
+        await fs.remove(resolvedPath);
+        deleted.push(relativePath);
+      } else {
+        errors.push({ file: relativePath, error: 'File not found' });
+      }
+    }
+    
+    logger.info('Batch delete completed', { ip: req.ip, deletedCount: deleted.length, errorCount: errors.length });
+    res.json({ success: true, deleted, errors });
+  } catch (err) {
+    logger.error('Failed batch delete', { error: err.message, ip: req.ip });
+    res.status(500).json({ error: 'Failed batch delete' });
+  }
+});
+
+// Batch download ZIP
+app.post('/api/downloads/zip', async (req, res) => {
+  try {
+    const { files } = req.body;
+    if (!Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ error: 'files must be a non-empty array' });
+    }
+
+    const resolvedDownloadsDir = path.resolve(downloadsDir);
+    
+    res.attachment('spotscraper_batch.zip');
+    const archive = archiver('zip', {
+      zlib: { level: 0 } // Fast compression since MP3s are already compressed
+    });
+
+    archive.on('error', function(err) {
+      logger.error('Archive error', { error: err.message });
+      if (!res.headersSent) res.status(500).send({error: err.message});
+    });
+
+    archive.pipe(res);
+
+    for (const relativePath of files) {
+      const filePath = path.join(downloadsDir, relativePath);
+      const resolvedPath = path.resolve(filePath);
+
+      if (resolvedPath.startsWith(resolvedDownloadsDir) && await fs.pathExists(resolvedPath)) {
+        archive.file(resolvedPath, { name: path.basename(relativePath) });
+      }
+    }
+
+    archive.finalize();
+  } catch (err) {
+    logger.error('Failed batch zip', { error: err.message, ip: req.ip });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed batch zip' });
+    }
   }
 });
 

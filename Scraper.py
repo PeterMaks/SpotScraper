@@ -9,6 +9,7 @@ import imageio_ffmpeg
 import unicodedata
 import sys
 import io
+import difflib
 
 # Force UTF-8 encoding for standard output and error to avoid Windows terminal encoding crashes
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -367,55 +368,16 @@ def check_already_downloaded(query, dir_cache, item_dict=None):
     if not track:
         track = query
 
-    def get_tokens(text):
-        if not text:
-            return []
-        text = unicodedata.normalize('NFKD', text)
-        # Remove apostrophes completely to handle contractions
-        for char in "'`’":
-            text = text.replace(char, '')
-        for char in "-_+=/\\|()[]{}?.,!;:\":~@#$%^&*~？。，、":
-            text = text.replace(char, ' ')
-        return [w.lower() for w in text.split() if w.isalnum()]
-
-    track_tokens = get_tokens(track)
-    artist_tokens = get_tokens(artist) if artist else []
-    
-    if not track_tokens:
-        return None
-
-    stop_tokens = {'official', 'video', 'audio', 'lyrics', 'lyric', 'mv', 'hq', 'hd', '320kbps', 'mp3', 'cover'}
-    filtered_track_tokens = [w for w in track_tokens if w not in stop_tokens]
-    if not filtered_track_tokens:
-        filtered_track_tokens = track_tokens
-
-    track_set = set(filtered_track_tokens)
-    artist_set = set(artist_tokens)
-
     for clean_filename, filepath in dir_cache.items():
         filename_no_ext = os.path.splitext(os.path.basename(filepath))[0]
-        file_tokens = get_tokens(filename_no_ext)
-        file_set = set(file_tokens)
-
-        # 1. Try matching using track and artist tokens
-        if track_set.issubset(file_set):
-            # Perfect match (track and artist)
-            if not artist_set or artist_set.intersection(file_set):
-                return filepath
-            # Track match, artist mismatch: require track name to be reasonably long/unique
-            track_char_len = sum(len(w) for w in filtered_track_tokens)
-            if len(track_set) >= 2 or track_char_len >= 5:
-                return filepath
-
-        # 2. Fallback: length-guarded clean substring matching on query
-        query_tokens = get_tokens(query)
-        filtered_query_tokens = [w for w in query_tokens if w not in stop_tokens]
-        if not filtered_query_tokens:
-            filtered_query_tokens = query_tokens
-        clean_query = "".join(filtered_query_tokens)
-        if clean_query and (clean_query in clean_filename or clean_filename in clean_query):
-            if len(clean_query) >= 5 or len(clean_query) == len(clean_filename):
-                return filepath
+        
+        # 1. Exact case-insensitive match
+        if track.lower().strip() == filename_no_ext.lower().strip():
+            return filepath
+            
+        # 2. Strict fuzzy match
+        if is_track_match(track, filename_no_ext):
+            return filepath
 
     return None
 
@@ -463,6 +425,49 @@ def is_artist_match(target_artist, title, uploader, channel=None):
             return True
             
     return False
+
+def is_track_match(target_track, video_title):
+    if not target_track:
+        return True
+    
+    # Strip common youtube suffixes from video_title before comparing
+    import re
+    stop_words = {'official', 'audio', 'video', 'lyrics', 'lyric', 'mv', 'hd', 'hq'}
+    title_words = re.findall(r'\b\w+\b', video_title.lower())
+    clean_title_words = [w for w in title_words if w not in stop_words]
+            
+    norm_target = normalize_text(target_track)
+    norm_title_clean = "".join(clean_title_words)
+    
+    if not norm_target or not norm_title_clean:
+        return True
+        
+    # Check if similarity is above 65%
+    similarity = difflib.SequenceMatcher(None, norm_target, norm_title_clean).ratio()
+    if similarity >= 0.65:
+        return True
+            
+    return False
+
+def is_duration_match(expected_duration_str, video_duration_seconds, tolerance=45):
+    if not expected_duration_str or expected_duration_str == "-":
+        return True # Cannot verify
+        
+    try:
+        # expected_duration_str is like "4m 27s"
+        parts = expected_duration_str.replace("s", "").split("m")
+        if len(parts) == 2:
+            expected_seconds = int(parts[0].strip()) * 60 + int(parts[1].strip())
+        elif len(parts) == 1:
+            expected_seconds = int(parts[0].strip())
+        else:
+            return True
+            
+        if abs(expected_seconds - video_duration_seconds) <= tolerance:
+            return True
+        return False
+    except Exception:
+        return True
 
 def search_and_scrape(download_list, base_url, is_single_query=False):
     """
@@ -586,7 +591,7 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
         if is_single_query:
             query = f"ytsearch1:{item}"
         else:
-            query = f"ytsearch5:{item}"
+            query = f"ytsearch5:{item} Official Audio"
         
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -606,9 +611,24 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
                             title = entry.get('title', '')
                             uploader = entry.get('uploader', '')
                             channel = entry.get('channel', '')
-                            if is_artist_match(target_artist, title, uploader, channel):
-                                selected_entry = entry
-                                break
+                            duration = entry.get('duration', 0)
+                            expected_duration = item_dict.get("duration", "-")
+                            target_track = item_dict.get("track", "")
+                            
+                            if not is_artist_match(target_artist, title, uploader, channel):
+                                print(f"    [Skipping] Artist mismatch for '{title}' (Channel: {channel})")
+                                continue
+                                
+                            if not is_track_match(target_track, title):
+                                print(f"    [Skipping] Track title mismatch for '{title}' (Expected: {target_track})")
+                                continue
+                                
+                            if not is_duration_match(expected_duration, duration):
+                                print(f"    [Skipping] Duration mismatch for '{title}' ({duration}s vs expected {expected_duration})")
+                                continue
+                                
+                            selected_entry = entry
+                            break
                 
                 if selected_entry:
                     title = selected_entry.get('title', 'Unknown Title')

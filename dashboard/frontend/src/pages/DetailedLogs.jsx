@@ -17,10 +17,18 @@ export default function DetailedLogs() {
     // Add items from download_links.json (API Scraper)
     if (logs?.downloadLinks) {
       Object.entries(logs.downloadLinks).forEach(([query, info]) => {
+        let title = info.title || query;
+        let artist = info.artist || 'Unknown Artist';
+        
+        if ((artist === 'Unknown Artist' || artist === 'Local Cache') && query.includes(' - ')) {
+          const parts = query.split(' - ');
+          artist = parts[0].trim();
+        }
+
         list.push({
           query,
-          title: info.title || query,
-          artist: info.artist || 'Unknown Artist',
+          title,
+          artist,
           album: info.album || 'Unknown Album',
           duration: info.duration || '-',
           source: 'API Scraper',
@@ -43,10 +51,18 @@ export default function DetailedLogs() {
 
         // Avoid duplicates if already in API logs
         if (!list.some(item => item.query === query)) {
+          let title = query;
+          let artist = '-';
+          
+          if (query.includes(' - ')) {
+            const parts = query.split(' - ');
+            artist = parts[0].trim();
+          }
+
           list.push({
             query,
-            title: query,
-            artist: '-',
+            title,
+            artist,
             album: '-',
             duration: '-',
             source: 'Selenium Scraper',

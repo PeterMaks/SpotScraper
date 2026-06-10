@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../AppContext';
 import Icons from '../components/Icons';
@@ -19,6 +19,11 @@ export default function Downloads() {
     isPlaying,
     backendUrl
   } = useAppContext();
+
+  const [selectedFiles, setSelectedFiles] = useState(new Set());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
+
+  const filteredDownloads = downloads.filter(file => file.name.toLowerCase().includes(downloadsSearch.toLowerCase()));
 
   const handleSingleDownload = async (e) => {
     e.preventDefault();
@@ -64,6 +69,79 @@ export default function Downloads() {
       }
     } catch (err) {
       console.error('Error deleting file:', err);
+    }
+  };
+
+  const handleCheckboxClick = (e, file, index) => {
+    e.stopPropagation();
+    const newSelected = new Set(selectedFiles);
+    
+    if (e.shiftKey && lastSelectedIndex !== null) {
+      const start = Math.min(lastSelectedIndex, index);
+      const end = Math.max(lastSelectedIndex, index);
+      for (let i = start; i <= end; i++) {
+        newSelected.add(filteredDownloads[i].name);
+      }
+    } else {
+      if (newSelected.has(file.name)) {
+        newSelected.delete(file.name);
+      } else {
+        newSelected.add(file.name);
+      }
+      setLastSelectedIndex(index);
+    }
+    setSelectedFiles(newSelected);
+  };
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedFiles(new Set(filteredDownloads.map(f => f.name)));
+    } else {
+      setSelectedFiles(new Set());
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete ${selectedFiles.size} files?`)) return;
+
+    try {
+      for (const filename of selectedFiles) {
+        await fetch(`${backendUrl}/api/downloads/file/${encodeURIComponent(filename)}`, {
+          method: 'DELETE'
+        });
+      }
+      setSelectedFiles(new Set());
+      fetchDownloads();
+    } catch (err) {
+      console.error('Error batch deleting files:', err);
+    }
+  };
+
+  const handleBatchDownload = async () => {
+    try {
+      const res = await fetch(`${backendUrl}/api/downloads/zip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: Array.from(selectedFiles) })
+      });
+      
+      if (!res.ok) throw new Error('Failed to create zip');
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = 'spotscraper_batch.zip';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      setSelectedFiles(new Set());
+    } catch (err) {
+      console.error('Error downloading zip:', err);
+      alert('Failed to download batch zip');
     }
   };
 
@@ -129,6 +207,13 @@ export default function Downloads() {
       ) : (
         <div className="downloads-list-container">
           <div className="track-header">
+            <div className="track-col-checkbox">
+              <input 
+                type="checkbox" 
+                checked={filteredDownloads.length > 0 && selectedFiles.size === filteredDownloads.length}
+                onChange={handleSelectAll}
+              />
+            </div>
             <div className="track-col-index">#</div>
             <div className="track-col-title">Title</div>
             <div className="track-col-album">Album</div>
@@ -137,8 +222,7 @@ export default function Downloads() {
           </div>
 
           <div className="downloads-list">
-            {downloads
-              .filter(file => file.name.toLowerCase().includes(downloadsSearch.toLowerCase()))
+            {filteredDownloads
               .map((file, index) => {
                 // Fallback metadata parsing
                 let title = file.title || file.name.replace('.mp3', '');
@@ -158,14 +242,23 @@ export default function Downloads() {
 
                 return (
                   <div 
-                    className={`track-row ${isRowPlaying ? 'playing' : ''}`} 
+                    className={`track-row ${isRowPlaying ? 'playing' : ''} ${selectedFiles.has(file.name) ? 'selected' : ''}`} 
                     key={file.name}
                     onDoubleClick={() => handlePlayTrack(file)}
-                    onClick={() => {
+                    onClick={(e) => {
+                      if (e.target.type === 'checkbox' || e.target.closest('.track-col-checkbox')) return;
                       // Single click selects/plays if not playing
                       if (!isRowPlaying) handlePlayTrack(file);
                     }}
                   >
+                    <div className="track-col-checkbox" onClick={(e) => handleCheckboxClick(e, file, index)}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedFiles.has(file.name)}
+                        onChange={() => {}} 
+                        onClick={(e) => e.stopPropagation()} 
+                      />
+                    </div>
                     <div className="track-col-index" onClick={(e) => { e.stopPropagation(); handlePlayTrack(file); }}>
                       {isRowPlaying && isPlaying ? (
                         <div className="playing-eq"><Icons.Music /></div>
@@ -219,6 +312,23 @@ export default function Downloads() {
                 No downloaded audio files found. Start the downloader to download files!
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {selectedFiles.size > 0 && (
+        <div className="batch-action-bar animate-slide-up">
+          <span className="batch-count">{selectedFiles.size} items selected</span>
+          <div className="batch-actions">
+            <button className="btn btn-primary" onClick={handleBatchDownload}>
+              <Icons.Download /> Save as ZIP
+            </button>
+            <button className="btn btn-secondary danger" onClick={handleBatchDelete}>
+              <Icons.Trash /> Delete
+            </button>
+            <button className="btn btn-secondary" onClick={() => setSelectedFiles(new Set())}>
+              Cancel
+            </button>
           </div>
         </div>
       )}
