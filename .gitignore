@@ -28,6 +28,8 @@ scrape_log.json
 scrape_audit.log
 recap_data.json
 qobuz_links.json
+archive_download_links.json
+archive_scrape_log.json
 
 # =========================
 # Downloaded media (large binary files)
