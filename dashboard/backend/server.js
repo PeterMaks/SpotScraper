@@ -489,7 +489,7 @@ app.post('/api/scrape/start', (req, res, next) => {
     const { script, limit, website, mode, query, sourceFile } = req.body;
     
     processType = script || 'api';
-    processLog = `Starting ${processType === 'selenium' ? 'YouTube-DL High Quality (320kbps)' : 'YouTube-DL Fast MP3 (192kbps)'}...\n`;
+    processLog = `Starting ${processType === 'selenium' ? 'High Quality - Albums (320kbps)' : 'Fast MP3 - Tracks (192kbps)'}...\n`;
     if (sourceFile) processLog += `Using data source: ${sourceFile}\n`;
     processStatus = 'running';
 

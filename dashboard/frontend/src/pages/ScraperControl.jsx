@@ -89,8 +89,8 @@ export default function ScraperControl() {
                 onChange={(e) => setScraperType(e.target.value)}
                 disabled={scraperStatus === 'running'}
               >
-                <option value="api">YouTube-DL Fast MP3 (192kbps)</option>
-                <option value="selenium">YouTube-DL High Quality (320kbps)</option>
+                <option value="api">Fast MP3 - Tracks (192kbps)</option>
+                <option value="selenium">High Quality - Albums (320kbps)</option>
               </select>
             </div>
 
@@ -109,20 +109,7 @@ export default function ScraperControl() {
               </select>
             </div>
 
-            {scraperType === 'selenium' && (
-              <div className="form-group">
-                <label>Search Mode</label>
-                <select 
-                  className="select"
-                  value={scraperMode}
-                  onChange={(e) => setScraperMode(e.target.value)}
-                  disabled={scraperStatus === 'running'}
-                >
-                  <option value="albums">Group into Albums</option>
-                  <option value="tracks">Individual Tracks</option>
-                </select>
-              </div>
-            )}
+
 
             <div className="form-group">
               <label>Items Limit</label>

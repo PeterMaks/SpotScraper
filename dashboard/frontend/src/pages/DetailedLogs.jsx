@@ -13,7 +13,7 @@ export default function DetailedLogs() {
   // Compile detailed logs list from backend data
   const getLogsList = () => {
     const list = [];
-    
+
     // Add items from download_links.json (API Scraper)
     if (logs?.downloadLinks) {
       Object.entries(logs.downloadLinks).forEach(([query, info]) => {
@@ -35,8 +35,11 @@ export default function DetailedLogs() {
     if (logs?.scrapeLog) {
       Object.entries(logs.scrapeLog).forEach(([query, status]) => {
         let resolvedStatus = 'unknown';
-        if (status.includes('Success')) resolvedStatus = 'downloaded';
-        else if (status.includes('Failed')) resolvedStatus = 'not_found';
+        const lowerStatus = status.toLowerCase();
+        if (lowerStatus.includes('success')) resolvedStatus = 'downloaded';
+        else if (lowerStatus.includes('failed')) resolvedStatus = 'not_found';
+        else if (lowerStatus.includes('skipped')) resolvedStatus = 'skipped';
+        else if (lowerStatus.includes('skipped mismatch')) resolvedStatus = 'skipped mismatch';
 
         // Avoid duplicates if already in API logs
         if (!list.some(item => item.query === query)) {
@@ -73,8 +76,8 @@ export default function DetailedLogs() {
       {/* Filter and Search Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', flexWrap: 'wrap' }}>
         <div className="filter-bar">
-          {['ALL', 'DOWNLOADED', 'NOT_FOUND', 'ERROR'].map(status => (
-            <button 
+          {['ALL', 'DOWNLOADED', 'NOT_FOUND', 'ERROR', 'SKIPPED/MISMATCH/UNKNOWN'].map(status => (
+            <button
               key={status}
               className={`filter-chip ${logsFilter === status ? 'active' : ''}`}
               onClick={() => setLogsFilter(status)}
@@ -84,10 +87,10 @@ export default function DetailedLogs() {
           ))}
         </div>
         <div style={{ width: '280px' }}>
-          <input 
-            type="text" 
-            className="input" 
-            placeholder="Search logs..." 
+          <input
+            type="text"
+            className="input"
+            placeholder="Search logs..."
             value={logsSearch}
             onChange={(e) => setLogsSearch(e.target.value)}
           />
@@ -118,7 +121,8 @@ export default function DetailedLogs() {
                     if (logsFilter === 'DOWNLOADED' && item.status !== 'downloaded') return false;
                     if (logsFilter === 'NOT_FOUND' && item.status !== 'not_found') return false;
                     if (logsFilter === 'ERROR' && item.status !== 'error' && item.status !== 'api_error' && item.status !== 'timeout') return false;
-                    
+                    if (logsFilter === 'SKIPPED/MISMATCH/UNKNOWN' && !['skipped', 'mismatch', 'unknown'].includes(item.status)) return false;
+
                     const term = logsSearch.toLowerCase();
                     return (
                       item.query.toLowerCase().includes(term) ||
@@ -128,11 +132,11 @@ export default function DetailedLogs() {
                     );
                   })
                   .map((item, idx) => {
-                    const statusClass = 
+                    const statusClass =
                       item.status === 'downloaded' ? 'badge-success' :
-                      item.status === 'ready_to_download' ? 'badge-info' :
-                      item.status === 'not_found' ? 'badge-danger' : 'badge-warning';
-                    
+                        item.status === 'ready_to_download' ? 'badge-info' :
+                          item.status === 'not_found' ? 'badge-danger' : 'badge-warning';
+
                     return (
                       <tr key={idx}>
                         <td style={{ paddingLeft: '24px', fontWeight: 600 }}>{item.query}</td>
