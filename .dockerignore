@@ -33,3 +33,5 @@ docs/
 *.md
 bandit_*.json
 skills-lock.json
+archive_*.json
+.github/
