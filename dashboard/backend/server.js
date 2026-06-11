@@ -150,6 +150,7 @@ async function loadUserMetadataMap() {
             let artist = '';
             let album = '';
             let durationMs = 0;
+            let releaseDate = '';
             
             Object.entries(row).forEach(([key, val]) => {
               const k = key.toLowerCase().trim();
@@ -161,6 +162,8 @@ async function loadUserMetadataMap() {
                 album = val;
               } else if (['duration', 'duration (ms)', 'duration_ms', 'ms'].includes(k)) {
                 durationMs = parseInt(val) || 0;
+              } else if (['release date', 'release_date', 'released'].includes(k)) {
+                releaseDate = val;
               }
             });
             
@@ -174,7 +177,8 @@ async function loadUserMetadataMap() {
                 artist: artist || 'Unknown Artist',
                 album: album || 'Unknown Album',
                 duration: durationMs > 0 ? formatDurationMs(durationMs) : '-',
-                durationMs: durationMs
+                durationMs: durationMs,
+                releaseDate: releaseDate || ''
               };
               
               queryToMeta[normQuery] = meta;
@@ -374,7 +378,8 @@ app.get('/api/downloads', async (req, res) => {
         title,
         artist,
         album,
-        duration
+        duration,
+        releaseDate: (userMeta && userMeta.releaseDate) || ''
       });
     }
 

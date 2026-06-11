@@ -93,7 +93,7 @@ def parse_excel_file(filepath):
         first_row = [str(cell).strip().lower() if cell is not None else "" for cell in rows[0]]
         
         track_idx, artist_idx, playlist_idx, uri_idx = -1, -1, -1, -1
-        album_idx, duration_idx = -1, -1
+        album_idx, duration_idx, release_date_idx = -1, -1, -1
         for idx, val in enumerate(first_row):
             if val in ('track', 'song', 'title', 'name', 'track name', 'song name'):
                 track_idx = idx
@@ -107,6 +107,8 @@ def parse_excel_file(filepath):
                 album_idx = idx
             elif val in ('duration', 'duration (ms)', 'duration_ms', 'ms'):
                 duration_idx = idx
+            elif val in ('release date', 'release_date', 'released'):
+                release_date_idx = idx
                 
         has_headers = (track_idx != -1 or artist_idx != -1)
         
@@ -120,6 +122,7 @@ def parse_excel_file(filepath):
                 playlist = str(row[playlist_idx]).strip() if playlist_idx != -1 and playlist_idx < len(row) and row[playlist_idx] is not None else ""
                 uri = str(row[uri_idx]).strip() if uri_idx != -1 and uri_idx < len(row) and row[uri_idx] is not None else ""
                 album = str(row[album_idx]).strip() if album_idx != -1 and album_idx < len(row) and row[album_idx] is not None else ""
+                release_date = str(row[release_date_idx]).strip() if release_date_idx != -1 and release_date_idx < len(row) and row[release_date_idx] is not None else ""
                 
                 duration_ms = 0
                 if duration_idx != -1 and duration_idx < len(row) and row[duration_idx] is not None:
@@ -147,7 +150,8 @@ def parse_excel_file(filepath):
                         "artist": artist,
                         "playlist": playlist,
                         "album": album,
-                        "duration": duration_str
+                        "duration": duration_str,
+                        "release_date": release_date
                     })
             else:
                 # No header: treat first cell as query, second as optional playlist
@@ -159,13 +163,13 @@ def parse_excel_file(filepath):
                     query = f"{track} {artist}".strip()
                     import hashlib
                     uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
-                    tracks.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist})
+                    tracks.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist, "release_date": ""})
                 elif len(cells) == 1 and cells[0]:
                     track = cells[0]
                     query = track
                     import hashlib
                     uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
-                    tracks.append({"id": uri, "query": query, "track": track, "artist": "", "playlist": ""})
+                    tracks.append({"id": uri, "query": query, "track": track, "artist": "", "playlist": "", "release_date": ""})
     except Exception as e:
         print(f"Error parsing Excel file {filepath}: {e}")
     return tracks
@@ -233,7 +237,7 @@ def parse_spotify_data(json_directory, specific_file=None):
                         if has_header:
                             headers = [h.strip().lower() for h in next(reader)]
                             track_idx, artist_idx, playlist_idx, uri_idx = -1, -1, -1, -1
-                            album_idx, duration_idx = -1, -1
+                            album_idx, duration_idx, release_date_idx = -1, -1, -1
                             for idx, h in enumerate(headers):
                                 if h in ('track', 'song', 'title', 'name', 'track name', 'song name'):
                                     track_idx = idx
@@ -247,6 +251,8 @@ def parse_spotify_data(json_directory, specific_file=None):
                                     album_idx = idx
                                 elif h in ('duration', 'duration (ms)', 'duration_ms', 'ms'):
                                     duration_idx = idx
+                                elif h in ('release date', 'release_date', 'released'):
+                                    release_date_idx = idx
                             
                             for row in reader:
                                 if not row:
@@ -256,6 +262,7 @@ def parse_spotify_data(json_directory, specific_file=None):
                                 playlist = row[playlist_idx].strip() if playlist_idx != -1 and playlist_idx < len(row) else ""
                                 uri = row[uri_idx].strip() if uri_idx != -1 and uri_idx < len(row) else ""
                                 album = row[album_idx].strip() if album_idx != -1 and album_idx < len(row) else ""
+                                release_date = row[release_date_idx].strip() if release_date_idx != -1 and release_date_idx < len(row) else ""
                                 
                                 duration_ms = 0
                                 if duration_idx != -1 and duration_idx < len(row):
@@ -285,7 +292,8 @@ def parse_spotify_data(json_directory, specific_file=None):
                                             "artist": artist,
                                             "playlist": playlist,
                                             "album": album,
-                                            "duration": duration_str
+                                            "duration": duration_str,
+                                            "release_date": release_date
                                         })
                         else:
                             for row in reader:
@@ -300,7 +308,7 @@ def parse_spotify_data(json_directory, specific_file=None):
                                         seen_queries.add(query)
                                         import hashlib
                                         uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
-                                        download_items.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist})
+                                        download_items.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist, "release_date": ""})
                                 elif len(row) == 1:
                                     track = row[0].strip()
                                     query = track
@@ -308,7 +316,7 @@ def parse_spotify_data(json_directory, specific_file=None):
                                         seen_queries.add(query)
                                         import hashlib
                                         uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
-                                        download_items.append({"id": uri, "query": query, "track": track, "artist": "", "playlist": ""})
+                                        download_items.append({"id": uri, "query": query, "track": track, "artist": "", "playlist": "", "release_date": ""})
                 except Exception as e:
                     print(f"Error parsing CSV file {filename}: {e}")
             
@@ -322,7 +330,16 @@ def parse_spotify_data(json_directory, specific_file=None):
                     uri = t.get("id", "")
                     if query not in seen_queries:
                         seen_queries.add(query)
-                        download_items.append({"id": uri, "query": query, "track": t.get("track", ""), "artist": t.get("artist", ""), "playlist": playlist})
+                        download_items.append({
+                            "id": uri,
+                            "query": query,
+                            "track": t.get("track", ""),
+                            "artist": t.get("artist", ""),
+                            "playlist": playlist,
+                            "album": t.get("album", ""),
+                            "duration": t.get("duration", "-"),
+                            "release_date": t.get("release_date", "")
+                        })
                     
             # B. Parse Spotify Streaming History files (excluding playlist JSONs)
             elif filename.endswith(".json") and "playlist" not in filename.lower():
@@ -362,7 +379,8 @@ def parse_spotify_data(json_directory, specific_file=None):
                                     "artist": artist,
                                     "playlist": playlist_name,
                                     "album": album if album else "",
-                                    "duration": duration_str
+                                    "duration": duration_str,
+                                    "release_date": ""
                                 })
                         elif episode and show:
                             query = f"{episode} {show}"
@@ -370,7 +388,7 @@ def parse_spotify_data(json_directory, specific_file=None):
                                 seen_queries.add(query)
                                 import hashlib
                                 uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
-                                download_items.append({"id": uri, "query": query, "track": episode, "artist": show, "playlist": "Podcasts"})
+                                download_items.append({"id": uri, "query": query, "track": episode, "artist": show, "playlist": "Podcasts", "release_date": ""})
                                 
     return download_items
 
@@ -487,6 +505,43 @@ def is_duration_match(expected_duration_str, video_duration_seconds, tolerance=4
         return False
     except Exception:
         return True
+
+REMASTER_KEYWORDS = {'remaster', 'remastered', 'deluxe', 'anniversary', 'edition', 're-release', 'reissue'}
+
+def is_release_date_match(spotify_release_date, yt_upload_date, yt_title="", tolerance_years=2):
+    """
+    Checks if the YouTube upload date is within ±tolerance_years of the Spotify release date.
+    If the YouTube title contains remaster keywords, the tolerance is widened to ±10 years
+    since remasters are re-releases of the same song at higher quality.
+    
+    spotify_release_date: "YYYY-MM-DD" or "YYYY" (from Spotify CSV)
+    yt_upload_date: "YYYYMMDD" (yt-dlp format) or None
+    yt_title: YouTube video title (for remaster detection)
+    Returns: (matches: bool, is_remaster: bool)
+    """
+    if not spotify_release_date or not yt_upload_date:
+        return True, False  # Cannot verify, allow it
+    
+    try:
+        # Parse Spotify release year
+        spotify_year = int(spotify_release_date[:4])
+        # Parse YouTube upload year
+        yt_year = int(yt_upload_date[:4])
+    except (ValueError, IndexError):
+        return True, False  # Cannot parse, allow it
+    
+    # Detect remaster from YouTube title
+    is_remaster = False
+    if yt_title:
+        title_lower = yt_title.lower()
+        is_remaster = any(kw in title_lower for kw in REMASTER_KEYWORDS)
+    
+    # Widen tolerance for remasters
+    effective_tolerance = 10 if is_remaster else tolerance_years
+    
+    if abs(spotify_year - yt_year) <= effective_tolerance:
+        return True, is_remaster
+    return False, is_remaster
 
 def search_and_scrape(download_list, base_url, is_single_query=False):
     """
@@ -751,13 +806,143 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
                         emit_log('downloadLinks', item, results[item])
                     else:
                         print(f"  ✗ Skipped: Artist mismatch. checked up to 5 results for: {item} (target artist: '{target_artist}')")
-                        results[item] = {
-                            'title': item,
-                            'status': 'skipped_mismatch',
-                            'search_time': search_time_str,
-                            'error': f"Artist mismatch (target: {target_artist})"
-                        }
-                        emit_log('downloadLinks', item, results[item])
+                        
+                        # --- FALLBACK: Retry with release year for more accurate results ---
+                        release_date = item_dict.get("release_date", "")
+                        fallback_entry = None
+                        
+                        if release_date and len(release_date) >= 4:
+                            release_year = release_date[:4]
+                            fallback_query = f"ytsearch5:{item} {release_year}"
+                            print(f"  🔄 [Fallback] Retrying with release year: {release_year}")
+                            
+                            try:
+                                fallback_info = ydl.extract_info(fallback_query, download=False)
+                                if 'entries' in fallback_info and len(fallback_info['entries']) > 0:
+                                    for fb_entry in fallback_info['entries']:
+                                        if not fb_entry:
+                                            continue
+                                        fb_title = fb_entry.get('title', '')
+                                        fb_duration = fb_entry.get('duration', 0)
+                                        fb_upload_date = fb_entry.get('upload_date', '')
+                                        expected_duration = item_dict.get("duration", "-")
+                                        target_track = item_dict.get("track", "")
+                                        
+                                        # Check track title match (required)
+                                        if not is_track_match(target_track, fb_title):
+                                            print(f"    [Fallback Skip] Track mismatch for '{fb_title}' (Expected: {target_track})")
+                                            continue
+                                        
+                                        # Check release date proximity (required when available)
+                                        date_matches, is_remaster = is_release_date_match(release_date, fb_upload_date, fb_title)
+                                        if not date_matches:
+                                            print(f"    [Fallback Skip] Release date mismatch for '{fb_title}' (upload: {fb_upload_date}, expected: ~{release_year})")
+                                            continue
+                                        
+                                        # Check duration match (required when available)
+                                        if not is_duration_match(expected_duration, fb_duration):
+                                            print(f"    [Fallback Skip] Duration mismatch for '{fb_title}' ({fb_duration}s vs expected {expected_duration})")
+                                            continue
+                                        
+                                        remaster_tag = " [Remaster]" if is_remaster else ""
+                                        print(f"  ✓ [Fallback] Found match: {fb_title}{remaster_tag}")
+                                        fallback_entry = fb_entry
+                                        break
+                            except Exception as fb_err:
+                                print(f"    [Fallback Error] {str(fb_err)}")
+                        
+                        if fallback_entry:
+                            # Process the fallback match (same download flow as normal match)
+                            title = fallback_entry.get('title', 'Unknown Title')
+                            uploader = fallback_entry.get('uploader', 'Unknown Artist')
+                            duration = fallback_entry.get('duration', 0)
+                            webpage_url = fallback_entry.get('webpage_url', '')
+                            if not webpage_url:
+                                webpage_url = f"https://www.youtube.com/watch?v={fallback_entry.get('id')}"
+                            
+                            mins, secs = divmod(int(duration), 60)
+                            duration_str = f"{mins}m {secs}s"
+                            
+                            print(f"    Artist: {uploader}")
+                            if playlist_name:
+                                print(f"    Playlist: {playlist_name}")
+                            print(f"    Duration: {duration_str}")
+                            print(f"    🔗 Link: {webpage_url}")
+                            print(f"\n    ⬇️ Starting download (with metadata & cover art)...\n")
+                            
+                            # Override metadata fields with Spotify details
+                            fallback_entry['title'] = item_dict.get('track') or title
+                            fallback_entry['artist'] = item_dict.get('artist') or uploader
+                            fallback_entry['album'] = playlist_name if playlist_name else 'SpotScraper Downloads'
+                            fallback_entry['track'] = item_dict.get('track') or title
+                            fallback_entry['uploader'] = item_dict.get('artist') or uploader
+                            if item_dict.get('id'):
+                                fallback_entry['comment'] = f"Spotify URI: {item_dict['id']}"
+                            
+                            ydl.process_info(fallback_entry)
+                            
+                            # Update cache with new file
+                            new_file = None
+                            try:
+                                prepared_filename = ydl.prepare_filename(fallback_entry)
+                                mp3_filename = os.path.splitext(prepared_filename)[0] + ".mp3"
+                                if os.path.exists(mp3_filename):
+                                    new_file = mp3_filename
+                            except Exception as prep_err:
+                                print(f"    (Warning preparing filename: {prep_err})")
+                            
+                            clean_yt_title = "".join(c for c in title if c.isalnum()).lower()
+                            for file in os.listdir(track_download_dir):
+                                if file.endswith('.mp3'):
+                                    filepath = os.path.join(track_download_dir, file)
+                                    filename_no_ext = os.path.splitext(file)[0]
+                                    clean_filename = "".join(c for c in filename_no_ext if c.isalnum()).lower()
+                                    dir_cache[clean_filename] = filepath
+                                    if not new_file and (clean_yt_title in clean_filename or clean_filename in clean_yt_title):
+                                        new_file = filepath
+                            
+                            if not new_file:
+                                new_file = check_already_downloaded(item, dir_cache, item_dict)
+                            
+                            if new_file:
+                                persistent_cache[item] = {
+                                    "id": item_dict.get("id", ""),
+                                    "query": item,
+                                    "file_path": new_file,
+                                    "youtube_title": title,
+                                    "youtube_artist": uploader
+                                }
+                                save_cache(persistent_cache)
+                            
+                            end_time = time.time()
+                            actual_duration = end_time - start_time
+                            download_completed_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            
+                            print(f"    ✅ Download complete in {actual_duration:.1f}s (via release-date fallback)")
+                            print(f"    Completed at: {download_completed_str}\n")
+                            logger.info("Download complete (fallback)", extra={"query": item, "url": webpage_url, "duration": actual_duration, "fallback": True})
+                            results[item] = {
+                                'title': title,
+                                'artist': uploader,
+                                'album': playlist_name if playlist_name else 'YouTube Video',
+                                'duration': duration_str,
+                                'type': 'track',
+                                'url': webpage_url,
+                                'status': 'downloaded',
+                                'search_time': search_time_str,
+                                'download_time': f"{actual_duration:.1f}s",
+                                'download_completed': download_completed_str
+                            }
+                            emit_log('downloadLinks', item, results[item])
+                        else:
+                            # Fallback also failed or no release date available
+                            results[item] = {
+                                'title': item,
+                                'status': 'skipped_mismatch',
+                                'search_time': search_time_str,
+                                'error': f"Artist mismatch (target: {target_artist})"
+                            }
+                            emit_log('downloadLinks', item, results[item])
                         
         except Exception as e:
             print(f"  ✗ Error searching/downloading: {item} - {str(e)}")

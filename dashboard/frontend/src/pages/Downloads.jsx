@@ -75,7 +75,7 @@ export default function Downloads() {
   const handleCheckboxClick = (e, file, index) => {
     e.stopPropagation();
     const newSelected = new Set(selectedFiles);
-    
+
     if (e.shiftKey && lastSelectedIndex !== null) {
       const start = Math.min(lastSelectedIndex, index);
       const end = Math.max(lastSelectedIndex, index);
@@ -124,9 +124,9 @@ export default function Downloads() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ files: Array.from(selectedFiles) })
       });
-      
+
       if (!res.ok) throw new Error('Failed to create zip');
-      
+
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -137,7 +137,7 @@ export default function Downloads() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
       setSelectedFiles(new Set());
     } catch (err) {
       console.error('Error downloading zip:', err);
@@ -170,9 +170,9 @@ export default function Downloads() {
       <div className="panel" style={{ padding: '20px' }}>
         <span className="panel-title" style={{ fontSize: '1rem', fontWeight: 600 }}>Download a Specific Song</span>
         <form onSubmit={handleSingleDownload} className="download-search" style={{ marginTop: '12px' }}>
-          <input 
-            type="text" 
-            className="input" 
+          <input
+            type="text"
+            className="input"
             placeholder="Enter song name and artist (e.g. 'Blinding Lights The Weeknd')..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -191,10 +191,10 @@ export default function Downloads() {
       </div>
 
       <div className="form-group" style={{ maxWidth: '300px' }}>
-        <input 
-          type="text" 
-          className="input" 
-          placeholder="Search downloaded files..." 
+        <input
+          type="text"
+          className="input"
+          placeholder="Search downloaded files..."
           value={downloadsSearch}
           onChange={(e) => setDownloadsSearch(e.target.value)}
         />
@@ -208,8 +208,8 @@ export default function Downloads() {
         <div className="downloads-list-container">
           <div className="track-header">
             <div className="track-col-checkbox">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={filteredDownloads.length > 0 && selectedFiles.size === filteredDownloads.length}
                 onChange={handleSelectAll}
               />
@@ -228,7 +228,7 @@ export default function Downloads() {
                 let title = file.title || file.name.replace('.mp3', '');
                 let artist = file.artist || 'Unknown Artist';
                 let album = file.album || '';
-                
+
                 if (!file.title) {
                   const parts = title.split(' - ');
                   if (parts.length >= 2) {
@@ -241,8 +241,8 @@ export default function Downloads() {
                 const isRowPlaying = currentTrack?.name === file.name;
 
                 return (
-                  <div 
-                    className={`track-row ${isRowPlaying ? 'playing' : ''} ${selectedFiles.has(file.name) ? 'selected' : ''}`} 
+                  <div
+                    className={`track-row ${isRowPlaying ? 'playing' : ''} ${selectedFiles.has(file.name) ? 'selected' : ''}`}
                     key={file.name}
                     onDoubleClick={() => handlePlayTrack(file)}
                     onClick={(e) => {
@@ -252,11 +252,11 @@ export default function Downloads() {
                     }}
                   >
                     <div className="track-col-checkbox" onClick={(e) => handleCheckboxClick(e, file, index)}>
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={selectedFiles.has(file.name)}
-                        onChange={() => {}} 
-                        onClick={(e) => e.stopPropagation()} 
+                        readOnly
+                        style={{ pointerEvents: 'none' }}
                       />
                     </div>
                     <div className="track-col-index" onClick={(e) => { e.stopPropagation(); handlePlayTrack(file); }}>
@@ -269,7 +269,7 @@ export default function Downloads() {
                         {isRowPlaying && isPlaying ? <Icons.Pause /> : <Icons.Play />}
                       </button>
                     </div>
-                    
+
                     <div className="track-col-title">
                       <div className="track-art">
                         <Icons.Music />
@@ -279,21 +279,21 @@ export default function Downloads() {
                         <span className="track-artist-name" title={artist}>{artist}</span>
                       </div>
                     </div>
-                    
+
                     <div className="track-col-album" title={album}>
                       {album || '-'}
                     </div>
-                    
+
                     <div className="track-col-date">
                       {new Date(file.mtime).toLocaleDateString()}
                     </div>
-                    
+
                     <div className="track-col-duration">
                       <div className="track-info-stack" style={{ alignItems: 'flex-end', marginRight: '16px' }}>
                         <span className="track-time" style={{ marginRight: 0 }}>{duration}</span>
                         <span className="track-artist-name" style={{ marginTop: '4px' }}>{formatBytes(file.size)}</span>
                       </div>
-                      
+
                       <div className="track-actions">
                         <a href={`${backendUrl}${file.url}`} download={file.name} title="Save to disk" onClick={(e) => e.stopPropagation()}>
                           <Icons.Download />
