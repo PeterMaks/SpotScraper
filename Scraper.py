@@ -5,7 +5,6 @@ from datetime import datetime
 import urllib.parse
 import csv
 import yt_dlp
-import imageio_ffmpeg
 import unicodedata
 import sys
 import io
@@ -588,7 +587,6 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
     downloads_dir = os.path.join(os.getcwd(), 'downloads')
     os.makedirs(downloads_dir, exist_ok=True)
     
-    ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
     persistent_cache = load_cache()
     dir_cache = build_dir_cache(downloads_dir)
     
@@ -675,7 +673,6 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
             
         ydl_opts = {
             'format': 'bestaudio/best',
-            'ffmpeg_location': ffmpeg_path,
             'outtmpl': os.path.join(track_download_dir, '%(title)s.%(ext)s'),
             'writethumbnail': True,
             'postprocessors': [

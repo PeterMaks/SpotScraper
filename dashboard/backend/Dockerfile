@@ -1,9 +1,9 @@
-FROM node:current-slim
+FROM node:20-alpine
 
 WORKDIR /app
 
 # Install Python, venv, ffmpeg, curl
-RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv python3-pip ffmpeg curl && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache python3 py3-pip ffmpeg curl
 
 # Create virtual environment so Node server finds it at .venv/bin/python
 RUN python3 -m venv .venv

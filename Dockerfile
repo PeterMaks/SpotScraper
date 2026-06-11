@@ -1,15 +1,12 @@
 # ============================================
 # SpotScraper — Python Scraper
 # ============================================
-FROM python:3.12-slim AS scraper
+FROM python:3.12-alpine AS scraper
 
 WORKDIR /app
 
-# System dependencies for yt-dlp (ffmpeg) and Playwright browsers
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# System dependencies for yt-dlp (ffmpeg)
+RUN apk add --no-cache ffmpeg curl
 
 # Install Python dependencies
 COPY requirements.txt .
