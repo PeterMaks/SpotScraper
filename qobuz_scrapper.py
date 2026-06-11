@@ -399,56 +399,51 @@ def check_already_downloaded(query, dir_cache, item_dict=None):
     
     if not track:
         track = query
+        
+    def get_clean_alphanumeric(text):
+        if not text:
+            return ""
+        text = unicodedata.normalize('NFKD', text)
+        return "".join(c for c in text if c.isalnum()).lower()
 
     def get_tokens(text):
         if not text:
-            return []
+            return set()
         text = unicodedata.normalize('NFKD', text)
-        # Remove apostrophes completely to handle contractions
         for char in "'`’":
             text = text.replace(char, '')
         for char in "-_+=/\\|()[]{}?.,!;:\":~@#$%^&*~？。，、":
             text = text.replace(char, ' ')
-        return [w.lower() for w in text.split() if w.isalnum()]
+        return set(w.lower() for w in text.split() if w.isalnum())
 
-    track_tokens = get_tokens(track)
-    artist_tokens = get_tokens(artist) if artist else []
-    
-    if not track_tokens:
-        return None
-
-    stop_tokens = {'official', 'video', 'audio', 'lyrics', 'lyric', 'mv', 'hq', 'hd', '320kbps', 'mp3', 'cover'}
-    filtered_track_tokens = [w for w in track_tokens if w not in stop_tokens]
-    if not filtered_track_tokens:
-        filtered_track_tokens = track_tokens
-
-    track_set = set(filtered_track_tokens)
-    artist_set = set(artist_tokens)
+    clean_track = get_clean_alphanumeric(track)
+    clean_query = get_clean_alphanumeric(query)
+    clean_artist = get_clean_alphanumeric(artist)
 
     for clean_filename, filepath in dir_cache.items():
         filename_no_ext = os.path.splitext(os.path.basename(filepath))[0]
-        file_tokens = get_tokens(filename_no_ext)
-        file_set = set(file_tokens)
-
-        # 1. Try matching using track and artist tokens
-        if track_set.issubset(file_set):
-            # Perfect match (track and artist)
-            if not artist_set or artist_set.intersection(file_set):
-                return filepath
-            # Track match, artist mismatch: require track name to be reasonably long/unique
-            track_char_len = sum(len(w) for w in filtered_track_tokens)
-            if len(track_set) >= 2 or track_char_len >= 5:
-                return filepath
-
-        # 2. Fallback: length-guarded clean substring matching on query
-        query_tokens = get_tokens(query)
-        filtered_query_tokens = [w for w in query_tokens if w not in stop_tokens]
-        if not filtered_query_tokens:
-            filtered_query_tokens = query_tokens
-        clean_query = "".join(filtered_query_tokens)
-        if clean_query and (clean_query in clean_filename or clean_filename in clean_query):
-            if len(clean_query) >= 5 or len(clean_query) == len(clean_filename):
-                return filepath
+        
+        # 1. Exact case-insensitive match
+        if track.lower().strip() == filename_no_ext.lower().strip():
+            return filepath
+            
+        # 2. Exact alphanumeric match of Track
+        if clean_track and clean_track == clean_filename:
+            return filepath
+            
+        # 3. Exact alphanumeric match of Query
+        if clean_query and clean_query == clean_filename:
+            return filepath
+            
+        # 4. Token-based containment (requires all track words AND all artist words)
+        if clean_track and clean_artist:
+            track_tokens = get_tokens(track)
+            artist_tokens = get_tokens(artist)
+            file_tokens = get_tokens(filename_no_ext)
+            
+            if track_tokens and artist_tokens:
+                if track_tokens.issubset(file_tokens) and artist_tokens.issubset(file_tokens):
+                    return filepath
 
     return None
 
@@ -936,6 +931,35 @@ def scrape_qobuz_squid(download_list, search_mode, is_single_query=False):
                             emit_log('downloadLinks', item, results[item])
 
         except Exception as e:
+            err_msg = str(e).lower()
+            if "confirm your age" in err_msg or "age restricted" in err_msg or "sign in" in err_msg:
+                print(f"  [!] YouTube age restriction encountered. Bypassing by falling back to SoundCloud...")
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl_sc:
+                        sc_info = ydl_sc.extract_info(f"scsearch1:{item}", download=True)
+                        if 'entries' in sc_info and len(sc_info['entries']) > 0:
+                            sc_entry = sc_info['entries'][0]
+                            sc_title = sc_entry.get('title', item)
+                            sc_uploader = sc_entry.get('uploader', 'SoundCloud Artist')
+                            print(f"  ✓ [SoundCloud] Successfully downloaded: {sc_title}")
+                            
+                            results[item] = {
+                                'title': sc_title,
+                                'artist': sc_uploader,
+                                'album': playlist_name if playlist_name else 'SoundCloud Audio',
+                                'duration': '-',
+                                'type': 'track',
+                                'url': sc_entry.get('webpage_url', 'local'),
+                                'status': 'downloaded',
+                                'search_time': search_time_str,
+                                'download_time': 'Fallback',
+                                'download_completed': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            }
+                            emit_log('downloadLinks', item, results[item])
+                            continue
+                except Exception as sc_err:
+                    print(f"  ✗ SoundCloud fallback also failed: {str(sc_err)}")
+                    
             print(f"❌ Failed processing '{item}'. Error: {str(e)}")
             logger.error("Download failed", extra={"query": item, "error": str(e)})
             results[item] = {

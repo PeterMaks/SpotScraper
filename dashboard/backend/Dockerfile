@@ -11,7 +11,6 @@ RUN python3 -m venv .venv
 # Install Python dependencies
 COPY requirements.txt ./
 RUN .venv/bin/pip install --no-cache-dir -r requirements.txt
-RUN .venv/bin/playwright install --with-deps chromium
 
 # Copy Python scraper scripts
 COPY *.py ./
