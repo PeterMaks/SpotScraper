@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../AppContext';
 import Icons from '../components/Icons';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table"
 
 export default function Downloads() {
   const navigate = useNavigate();
@@ -39,7 +43,7 @@ export default function Downloads() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          script: 'selenium', // Selenium actually performs file downloads
+          script: 'selenium', 
           query: searchQuery
         })
       });
@@ -155,180 +159,184 @@ export default function Downloads() {
   };
 
   return (
-    <div className="tab-content animate-fade-in">
-      <div className="header-summary">
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500 pb-32">
+      <div className="flex items-center justify-between">
         <div>
-          <h2>Downloads Manager</h2>
-          <p style={{ color: 'var(--text-muted)', marginTop: '4px' }}>Manage and play audio files in your local downloads folder</p>
+          <h2 className="text-3xl font-bold tracking-tight">Downloads Manager</h2>
+          <p className="text-muted-foreground mt-1">Manage and play audio files in your local downloads folder</p>
         </div>
-        <button className="btn btn-secondary" onClick={fetchDownloads} disabled={loadingDownloads}>
+        <Button variant="secondary" onClick={fetchDownloads} disabled={loadingDownloads}>
           Sync Files
-        </button>
+        </Button>
       </div>
 
-      {/* Direct Song Search Bar */}
-      <div className="panel" style={{ padding: '20px' }}>
-        <span className="panel-title" style={{ fontSize: '1rem', fontWeight: 600 }}>Download a Specific Song</span>
-        <form onSubmit={handleSingleDownload} className="download-search" style={{ marginTop: '12px' }}>
-          <input
-            type="text"
-            className="input"
-            placeholder="Enter song name and artist (e.g. 'Blinding Lights The Weeknd')..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            disabled={scraperStatus === 'running'}
-            required
-          />
-          <button type="submit" className="btn btn-primary" disabled={scraperStatus === 'running'}>
-            Download Song
-          </button>
-        </form>
-        {queryStatus && (
-          <p style={{ fontSize: '0.85rem', color: 'var(--accent-blue)', marginTop: '8px' }}>
-            {queryStatus}
-          </p>
-        )}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Download a Specific Song</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSingleDownload} className="flex gap-4 max-w-xl">
+            <Input
+              type="text"
+              placeholder="Enter song name and artist (e.g. 'Blinding Lights The Weeknd')..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              disabled={scraperStatus === 'running'}
+              required
+              className="flex-1"
+            />
+            <Button type="submit" disabled={scraperStatus === 'running'}>
+              Download Song
+            </Button>
+          </form>
+          {queryStatus && (
+            <p className="text-sm text-blue-500 mt-2 font-medium">
+              {queryStatus}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
-      <div className="form-group" style={{ maxWidth: '300px' }}>
-        <input
+      <div className="max-w-xs">
+        <Input
           type="text"
-          className="input"
           placeholder="Search downloaded files..."
           value={downloadsSearch}
           onChange={(e) => setDownloadsSearch(e.target.value)}
         />
       </div>
 
-      {loadingDownloads ? (
-        <div style={{ textAlign: 'center', padding: '40px' }} className="pulse">
-          <p>Scanning downloads folder...</p>
-        </div>
-      ) : (
-        <div className="downloads-list-container">
-          <div className="track-header">
-            <div className="track-col-checkbox">
-              <input
-                type="checkbox"
-                checked={filteredDownloads.length > 0 && selectedFiles.size === filteredDownloads.length}
-                onChange={handleSelectAll}
-              />
-            </div>
-            <div className="track-col-index">#</div>
-            <div className="track-col-title">Title</div>
-            <div className="track-col-album">Album</div>
-            <div className="track-col-date">Date added</div>
-            <div className="track-col-duration"><Icons.Clock /></div>
-          </div>
+      <Card>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[50px] text-center">
+                  <input
+                    type="checkbox"
+                    className="accent-primary w-4 h-4"
+                    checked={filteredDownloads.length > 0 && selectedFiles.size === filteredDownloads.length}
+                    onChange={handleSelectAll}
+                  />
+                </TableHead>
+                <TableHead className="w-[50px] text-center">#</TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead>Album</TableHead>
+                <TableHead>Date added</TableHead>
+                <TableHead className="text-right">
+                  <Icons.Clock className="inline-block size-4" />
+                </TableHead>
+                <TableHead className="w-[100px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loadingDownloads ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center">
+                    Scanning downloads folder...
+                  </TableCell>
+                </TableRow>
+              ) : filteredDownloads.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                    No downloaded audio files found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredDownloads.map((file, index) => {
+                  let title = file.title || file.name.replace('.mp3', '');
+                  let artist = file.artist || 'Unknown Artist';
+                  let album = file.album || '-';
 
-          <div className="downloads-list">
-            {filteredDownloads
-              .map((file, index) => {
-                // Fallback metadata parsing
-                let title = file.title || file.name.replace('.mp3', '');
-                let artist = file.artist || 'Unknown Artist';
-                let album = file.album || '';
-
-                if (!file.title) {
-                  const parts = title.split(' - ');
-                  if (parts.length >= 2) {
-                    artist = parts[0];
-                    title = parts.slice(1).join(' - ');
+                  if (!file.title) {
+                    const parts = title.split(' - ');
+                    if (parts.length >= 2) {
+                      artist = parts[0];
+                      title = parts.slice(1).join(' - ');
+                    }
                   }
-                }
 
-                const duration = file.duration && file.duration !== "-" ? file.duration : formatBytes(file.size);
-                const isRowPlaying = currentTrack?.name === file.name;
+                  const duration = file.duration && file.duration !== "-" ? file.duration : formatBytes(file.size);
+                  const isRowPlaying = currentTrack?.name === file.name;
+                  const isSelected = selectedFiles.has(file.name);
 
-                return (
-                  <div
-                    className={`track-row ${isRowPlaying ? 'playing' : ''} ${selectedFiles.has(file.name) ? 'selected' : ''}`}
-                    key={file.name}
-                    onDoubleClick={() => handlePlayTrack(file)}
-                    onClick={(e) => {
-                      if (e.target.type === 'checkbox' || e.target.closest('.track-col-checkbox')) return;
-                      // Single click selects/plays if not playing
-                      if (!isRowPlaying) handlePlayTrack(file);
-                    }}
-                  >
-                    <div className="track-col-checkbox" onClick={(e) => handleCheckboxClick(e, file, index)}>
-                      <input
-                        type="checkbox"
-                        checked={selectedFiles.has(file.name)}
-                        readOnly
-                        style={{ pointerEvents: 'none' }}
-                      />
-                    </div>
-                    <div className="track-col-index" onClick={(e) => { e.stopPropagation(); handlePlayTrack(file); }}>
-                      {isRowPlaying && isPlaying ? (
-                        <div className="playing-eq"><Icons.Music /></div>
-                      ) : (
-                        <span className="track-number">{index + 1}</span>
-                      )}
-                      <button className="track-play-btn">
-                        {isRowPlaying && isPlaying ? <Icons.Pause /> : <Icons.Play />}
-                      </button>
-                    </div>
-
-                    <div className="track-col-title">
-                      <div className="track-art">
-                        <Icons.Music />
-                      </div>
-                      <div className="track-info-stack">
-                        <span className={`track-name ${isRowPlaying ? 'active-text' : ''}`} title={title}>{title}</span>
-                        <span className="track-artist-name" title={artist}>{artist}</span>
-                      </div>
-                    </div>
-
-                    <div className="track-col-album" title={album}>
-                      {album || '-'}
-                    </div>
-
-                    <div className="track-col-date">
-                      {new Date(file.mtime).toLocaleDateString()}
-                    </div>
-
-                    <div className="track-col-duration">
-                      <div className="track-info-stack" style={{ alignItems: 'flex-end', marginRight: '16px' }}>
-                        <span className="track-time" style={{ marginRight: 0 }}>{duration}</span>
-                        <span className="track-artist-name" style={{ marginTop: '4px' }}>{formatBytes(file.size)}</span>
-                      </div>
-
-                      <div className="track-actions">
-                        <a href={`${backendUrl}${file.url}`} download={file.name} title="Save to disk" onClick={(e) => e.stopPropagation()}>
-                          <Icons.Download />
-                        </a>
-                        <button onClick={(e) => { e.stopPropagation(); handleDeleteFile(file.name); }} className="btn-icon danger" title="Delete">
-                          <Icons.Trash />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-            {downloads.length === 0 && (
-              <div className="empty-state" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                No downloaded audio files found. Start the downloader to download files!
-              </div>
-            )}
-          </div>
+                  return (
+                    <TableRow 
+                      key={file.name}
+                      data-state={isSelected ? "selected" : undefined}
+                      className={`cursor-pointer group ${isRowPlaying ? 'bg-primary/5' : ''}`}
+                      onDoubleClick={() => handlePlayTrack(file)}
+                      onClick={(e) => {
+                        if (e.target.type === 'checkbox') return;
+                        if (!isRowPlaying) handlePlayTrack(file);
+                      }}
+                    >
+                      <TableCell className="text-center" onClick={(e) => handleCheckboxClick(e, file, index)}>
+                        <input
+                          type="checkbox"
+                          className="accent-primary w-4 h-4 pointer-events-none"
+                          checked={isSelected}
+                          readOnly
+                        />
+                      </TableCell>
+                      <TableCell className="text-center font-medium" onClick={(e) => { e.stopPropagation(); handlePlayTrack(file); }}>
+                        {isRowPlaying && isPlaying ? (
+                          <Icons.Music className="size-4 animate-pulse text-primary mx-auto" />
+                        ) : (
+                          <div className="relative flex items-center justify-center h-full">
+                            <span className="group-hover:hidden">{index + 1}</span>
+                            <Icons.Play className="size-4 hidden group-hover:block" />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+                            <Icons.Music className="size-5" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className={`font-medium ${isRowPlaying ? 'text-primary' : ''}`}>{title}</span>
+                            <span className="text-sm text-muted-foreground">{artist}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{album}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{new Date(file.mtime).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-right text-muted-foreground text-sm">{duration}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" asChild onClick={(e) => e.stopPropagation()}>
+                            <a href={`${backendUrl}${file.url}`} download={file.name} title="Save to disk">
+                              <Icons.Download className="size-4" />
+                            </a>
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteFile(file.name); }} title="Delete" className="text-red-500 hover:text-red-600 hover:bg-red-500/10">
+                            <Icons.Trash className="size-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
         </div>
-      )}
+      </Card>
 
       {selectedFiles.size > 0 && (
-        <div className="batch-action-bar animate-slide-up">
-          <span className="batch-count">{selectedFiles.size} items selected</span>
-          <div className="batch-actions">
-            <button className="btn btn-primary" onClick={handleBatchDownload}>
-              <Icons.Download /> Save as ZIP
-            </button>
-            <button className="btn btn-secondary danger" onClick={handleBatchDelete}>
-              <Icons.Trash /> Delete
-            </button>
-            <button className="btn btn-secondary" onClick={() => setSelectedFiles(new Set())}>
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-background border shadow-xl rounded-full px-6 py-3 flex items-center gap-6 z-40 animate-in slide-in-from-bottom-10 fade-in duration-300">
+          <span className="text-primary font-medium">{selectedFiles.size} items selected</span>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleBatchDownload} className="rounded-full h-9">
+              <Icons.Download className="size-4 mr-2" /> Save as ZIP
+            </Button>
+            <Button variant="destructive" onClick={handleBatchDelete} className="rounded-full h-9">
+              <Icons.Trash className="size-4 mr-2" /> Delete
+            </Button>
+            <Button variant="ghost" onClick={() => setSelectedFiles(new Set())} className="rounded-full h-9">
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}

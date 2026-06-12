@@ -1,102 +1,58 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../AppContext';
 import * as Icons from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 
 export default function DetailedLogs() {
-  const {
-    logs,
-    fetchLogs,
-    loadingLogs,
-    logsFilter, setLogsFilter,
-    logsSearch, setLogsSearch,
-    backendUrl
-  } = useAppContext();
-
+  const { logs, fetchLogs, loadingLogs, logsFilter, setLogsFilter, logsSearch, setLogsSearch, backendUrl } = useAppContext();
   const [selectedLogs, setSelectedLogs] = useState(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
 
-  // Fetch logs when the component mounts
-  useEffect(() => {
-    fetchLogs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { fetchLogs(); }, []);
 
-  // Compile detailed logs list from backend data
   const getLogsList = () => {
     const list = [];
-
-    // Add items from download_links.json (API Scraper)
     if (logs?.downloadLinks) {
       Object.entries(logs.downloadLinks).forEach(([query, info]) => {
         let title = info.title || query;
         let artist = info.artist || 'Unknown Artist';
-        
         if ((artist === 'Unknown Artist' || artist === 'Local Cache') && query.includes(' - ')) {
           const parts = query.split(' - ');
           artist = parts[0].trim();
         }
-
         let rawTime = 0;
         const timeStr = info.download_completed || info.search_time;
         if (timeStr && timeStr !== '-') {
           const parsed = new Date(timeStr.replace(' ', 'T')).getTime();
           if (!isNaN(parsed)) rawTime = parsed;
         }
-
-        list.push({
-          query,
-          title,
-          artist,
-          album: info.album || 'Unknown Album',
-          duration: info.duration || '-',
-          source: info.source === 'selenium' ? 'Selenium Scraper' : 'API Scraper',
-          status: info.status || 'unknown',
-          time: timeStr || '-',
-          error: info.error || null,
-          rawTime
-        });
+        list.push({ query, title, artist, album: info.album || 'Unknown Album', duration: info.duration || '-', source: info.source === 'selenium' ? 'Selenium Scraper' : 'API Scraper', status: info.status || 'unknown', time: timeStr || '-', error: info.error || null, rawTime });
       });
     }
-
-    // Add items from scrape_log.json (Selenium Scraper)
     if (logs?.scrapeLog) {
       Object.entries(logs.scrapeLog).forEach(([query, status]) => {
         let resolvedStatus = 'unknown';
         const lowerStatus = status.toLowerCase();
         if (lowerStatus.includes('success')) resolvedStatus = 'downloaded';
         else if (lowerStatus.includes('failed')) resolvedStatus = 'not_found';
-        else if (lowerStatus.includes('skipped')) resolvedStatus = 'skipped';
         else if (lowerStatus.includes('skipped mismatch')) resolvedStatus = 'skipped mismatch';
-
-        // Avoid duplicates if already in API logs
+        else if (lowerStatus.includes('skipped')) resolvedStatus = 'skipped';
+        
         if (!list.some(item => item.query === query)) {
           let title = query;
           let artist = '-';
-          
           if (query.includes(' - ')) {
             const parts = query.split(' - ');
             artist = parts[0].trim();
           }
-
-          list.push({
-            query,
-            title,
-            artist,
-            album: '-',
-            duration: '-',
-            source: 'Selenium Scraper',
-            status: resolvedStatus,
-            time: '-',
-            error: status.includes('Failed') ? status : null,
-            rawTime: 0 // Selenium logs don't currently save time, default to 0
-          });
+          list.push({ query, title, artist, album: '-', duration: '-', source: 'Selenium Scraper', status: resolvedStatus, time: '-', error: status.includes('Failed') ? status : null, rawTime: 0 });
         }
       });
     }
-
-    // Sort descending by time
     list.sort((a, b) => b.rawTime - a.rawTime);
-
     return list;
   };
 
@@ -105,56 +61,37 @@ export default function DetailedLogs() {
     if (logsFilter === 'NOT_FOUND' && item.status !== 'not_found') return false;
     if (logsFilter === 'ERROR' && item.status !== 'error' && item.status !== 'api_error' && item.status !== 'timeout') return false;
     if (logsFilter === 'SKIPPED/MISMATCH/UNKNOWN' && !['skipped', 'mismatch', 'skipped_mismatch', 'unknown'].includes(item.status)) return false;
-
     const term = logsSearch.toLowerCase();
-    return (
-      item.query.toLowerCase().includes(term) ||
-      item.title.toLowerCase().includes(term) ||
-      item.artist.toLowerCase().includes(term) ||
-      item.album.toLowerCase().includes(term)
-    );
+    return item.query.toLowerCase().includes(term) || item.title.toLowerCase().includes(term) || item.artist.toLowerCase().includes(term) || item.album.toLowerCase().includes(term);
   });
 
   const handleCheckboxClick = (e, query, index) => {
     e.stopPropagation();
     const newSelected = new Set(selectedLogs);
-
     if (e.shiftKey && lastSelectedIndex !== null) {
       const start = Math.min(lastSelectedIndex, index);
       const end = Math.max(lastSelectedIndex, index);
       const isSelected = newSelected.has(query);
-
       for (let i = start; i <= end; i++) {
-        if (isSelected) {
-          newSelected.delete(filteredLogs[i].query);
-        } else {
-          newSelected.add(filteredLogs[i].query);
-        }
+        if (isSelected) newSelected.delete(filteredLogs[i].query);
+        else newSelected.add(filteredLogs[i].query);
       }
     } else {
-      if (newSelected.has(query)) {
-        newSelected.delete(query);
-      } else {
-        newSelected.add(query);
-      }
+      if (newSelected.has(query)) newSelected.delete(query);
+      else newSelected.add(query);
     }
-
     setSelectedLogs(newSelected);
     setLastSelectedIndex(index);
   };
 
   const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      setSelectedLogs(new Set(filteredLogs.map(item => item.query)));
-    } else {
-      setSelectedLogs(new Set());
-    }
+    if (e.target.checked) setSelectedLogs(new Set(filteredLogs.map(item => item.query)));
+    else setSelectedLogs(new Set());
     setLastSelectedIndex(null);
   };
 
   const handleBatchDelete = async () => {
     if (!window.confirm(`Are you sure you want to delete ${selectedLogs.size} logs? They will be archived.`)) return;
-
     try {
       const res = await fetch(`${backendUrl}/api/logs/delete-batch`, {
         method: 'POST',
@@ -165,157 +102,108 @@ export default function DetailedLogs() {
         setSelectedLogs(new Set());
         fetchLogs();
       }
-    } catch (err) {
-      console.error('Error batch deleting logs:', err);
-    }
+    } catch (err) {}
   };
 
   const handleClearAll = async () => {
     if (!window.confirm('Are you sure you want to clear ALL logs? They will be archived.')) return;
-
     try {
       const res = await fetch(`${backendUrl}/api/logs/clear`, { method: 'POST' });
       if (res.ok) {
         setSelectedLogs(new Set());
         fetchLogs();
       }
-    } catch (err) {
-      console.error('Error clearing logs:', err);
-    }
+    } catch (err) {}
   };
 
   return (
-    <div className="tab-content animate-fade-in">
-      <div className="header-summary">
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500 pb-32">
+      <div className="flex items-center justify-between">
         <div>
-          <h2>Execution & Scrape Logs</h2>
-          <p style={{ color: 'var(--text-muted)', marginTop: '4px' }}>Detailed report of all searched queries and their resolve status</p>
+          <h2 className="text-3xl font-bold tracking-tight">Execution & Scrape Logs</h2>
+          <p className="text-muted-foreground mt-1">Detailed report of all searched queries and their resolve status</p>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="btn btn-secondary danger" onClick={handleClearAll} disabled={loadingLogs || getLogsList().length === 0}>
+        <div className="flex gap-3">
+          <Button variant="destructive" onClick={handleClearAll} disabled={loadingLogs || getLogsList().length === 0}>
             Clear All
-          </button>
-          <button className="btn btn-secondary" onClick={fetchLogs} disabled={loadingLogs}>
+          </Button>
+          <Button variant="secondary" onClick={fetchLogs} disabled={loadingLogs}>
             Refresh Logs
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', flexWrap: 'wrap' }}>
-        <div className="filter-bar">
+      <div className="flex justify-between items-center gap-4 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
           {['ALL', 'DOWNLOADED', 'NOT_FOUND', 'ERROR', 'SKIPPED/MISMATCH/UNKNOWN'].map(status => (
-            <button
-              key={status}
-              className={`filter-chip ${logsFilter === status ? 'active' : ''}`}
-              onClick={() => setLogsFilter(status)}
-            >
+            <Button key={status} variant={logsFilter === status ? "default" : "secondary"} className="rounded-full h-8 px-4 text-xs" onClick={() => setLogsFilter(status)}>
               {status}
-            </button>
+            </Button>
           ))}
         </div>
-        <div style={{ width: '280px' }}>
-          <input
-            type="text"
-            className="input"
-            placeholder="Search logs..."
-            value={logsSearch}
-            onChange={(e) => setLogsSearch(e.target.value)}
-          />
+        <div className="w-72">
+          <Input type="text" placeholder="Search logs..." value={logsSearch} onChange={(e) => setLogsSearch(e.target.value)} />
         </div>
       </div>
 
-      {loadingLogs ? (
-        <div style={{ textAlign: 'center', padding: '40px' }} className="pulse">
-          <p>Loading log files...</p>
-        </div>
-      ) : (
-        <div className="panel" style={{ padding: '0px', overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="tracks-table" style={{ width: '100%' }}>
-              <thead>
-                <tr>
-                  <th style={{ paddingLeft: '16px', width: '40px' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={filteredLogs.length > 0 && selectedLogs.size === filteredLogs.length}
-                      onChange={handleSelectAll}
-                    />
-                  </th>
-                  <th>Query / Song Name</th>
-                  <th>Resolved Match</th>
-                  <th>Album / Artist</th>
-                  <th>Engine</th>
-                  <th>Status</th>
-                  <th style={{ paddingRight: '24px', textAlign: 'right' }}>Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLogs.map((item, idx) => {
-                  const statusClass =
-                    item.status === 'downloaded' ? 'badge-success' :
-                      item.status === 'ready_to_download' ? 'badge-info' :
-                        item.status === 'not_found' ? 'badge-danger' : 'badge-warning';
-
+      <Card>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[50px] text-center">
+                  <input type="checkbox" className="accent-primary w-4 h-4" checked={filteredLogs.length > 0 && selectedLogs.size === filteredLogs.length} onChange={handleSelectAll} />
+                </TableHead>
+                <TableHead>Query / Song Name</TableHead>
+                <TableHead>Resolved Match</TableHead>
+                <TableHead>Album / Artist</TableHead>
+                <TableHead>Engine</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Time</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loadingLogs ? (
+                <TableRow><TableCell colSpan={7} className="h-24 text-center">Loading log files...</TableCell></TableRow>
+              ) : filteredLogs.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground">No log files parsed.</TableCell></TableRow>
+              ) : (
+                filteredLogs.map((item, idx) => {
+                  const isSelected = selectedLogs.has(item.query);
+                  const statusColors = { downloaded: "bg-green-500/10 text-green-500 border-green-500/20", ready_to_download: "bg-blue-500/10 text-blue-500 border-blue-500/20", not_found: "bg-red-500/10 text-red-500 border-red-500/20", error: "bg-red-500/10 text-red-500 border-red-500/20", api_error: "bg-red-500/10 text-red-500 border-red-500/20", timeout: "bg-red-500/10 text-red-500 border-red-500/20" };
+                  const colorClass = statusColors[item.status] || "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
                   return (
-                    <tr key={idx} onClick={(e) => {
-                      if (e.target.type !== 'checkbox') {
-                        handleCheckboxClick(e, item.query, idx);
-                      }
-                    }} style={{ cursor: 'pointer' }} className={selectedLogs.has(item.query) ? 'selected' : ''}>
-                      <td style={{ paddingLeft: '16px' }} onClick={(e) => handleCheckboxClick(e, item.query, idx)}>
-                        <input 
-                          type="checkbox" 
-                          checked={selectedLogs.has(item.query)}
-                          onChange={() => {}} 
-                          onClick={(e) => e.stopPropagation()} 
-                        />
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{item.query}</td>
-                      <td>{item.title !== item.query ? item.title : '-'}</td>
-                      <td>
+                    <TableRow key={idx} data-state={isSelected ? "selected" : undefined} className="cursor-pointer" onClick={(e) => { if (e.target.type !== 'checkbox') handleCheckboxClick(e, item.query, idx); }}>
+                      <TableCell className="text-center" onClick={(e) => handleCheckboxClick(e, item.query, idx)}>
+                        <input type="checkbox" className="accent-primary w-4 h-4 pointer-events-none" checked={isSelected} readOnly />
+                      </TableCell>
+                      <TableCell className="font-medium">{item.query}</TableCell>
+                      <TableCell>{item.title !== item.query ? item.title : '-'}</TableCell>
+                      <TableCell>
                         {item.artist !== '-' ? (
-                          <div>
-                            <div>{item.artist}</div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{item.album}</div>
-                          </div>
+                          <div className="flex flex-col"><span>{item.artist}</span><span className="text-xs text-muted-foreground">{item.album}</span></div>
                         ) : '-'}
-                      </td>
-                      <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{item.source}</td>
-                      <td>
-                        <span className={`badge ${statusClass}`}>
-                          {item.status.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td style={{ paddingRight: '24px', textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        {item.time}
-                      </td>
-                    </tr>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{item.source}</TableCell>
+                      <TableCell>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${colorClass}`}>{item.status.replace(/_/g, ' ').toUpperCase()}</span>
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground">{item.time}</TableCell>
+                    </TableRow>
                   );
-                })}
-                {getLogsList().length === 0 && (
-                  <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                      No log files parsed. Make sure <code>download_links.json</code> or <code>scrape_log.json</code> exist in the root of the project.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                })
+              )}
+            </TableBody>
+          </Table>
         </div>
-      )}
+      </Card>
 
       {selectedLogs.size > 0 && (
-        <div className="batch-action-bar animate-slide-up">
-          <span className="batch-count">{selectedLogs.size} logs selected</span>
-          <div className="batch-actions">
-            <button className="btn btn-secondary danger" onClick={handleBatchDelete}>
-              <Icons.Trash /> Archive Selected
-            </button>
-            <button className="btn btn-secondary" onClick={() => setSelectedLogs(new Set())}>
-              Cancel
-            </button>
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-background border shadow-xl rounded-full px-6 py-3 flex items-center gap-6 z-40 animate-in slide-in-from-bottom-10 fade-in duration-300">
+          <span className="text-primary font-medium">{selectedLogs.size} logs selected</span>
+          <div className="flex items-center gap-2">
+            <Button variant="destructive" onClick={handleBatchDelete} className="rounded-full h-9"><Icons.Trash className="size-4 mr-2" /> Archive Selected</Button>
+            <Button variant="ghost" onClick={() => setSelectedLogs(new Set())} className="rounded-full h-9">Cancel</Button>
           </div>
         </div>
       )}

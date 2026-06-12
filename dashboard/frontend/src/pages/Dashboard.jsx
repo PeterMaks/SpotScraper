@@ -1,5 +1,9 @@
 import React from 'react';
 import { useAppContext } from '../AppContext';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table"
+import { Progress } from "@/components/ui/progress"
 
 export default function Dashboard() {
   const {
@@ -12,183 +16,187 @@ export default function Dashboard() {
   } = useAppContext();
 
   return (
-    <div className="tab-content animate-fade-in">
-      <div className="header-summary">
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+      <div className="flex items-center justify-between">
         <div>
-          <h2>Spotify Recaps & Insights</h2>
-          <p style={{ color: 'var(--text-muted)', marginTop: '4px' }}>Overview gathered from Spotify Extended Streaming History</p>
+          <h2 className="text-3xl font-bold tracking-tight">Spotify Recaps & Insights</h2>
+          <p className="text-muted-foreground mt-1">Overview gathered from Spotify Extended Streaming History</p>
         </div>
-        <button className="btn btn-secondary" onClick={fetchStats} disabled={loadingStats}>
+        <Button variant="secondary" onClick={fetchStats} disabled={loadingStats}>
           Refresh Stats
-        </button>
+        </Button>
       </div>
 
       {/* Upload Zone */}
-      <div className="panel" style={{ marginBottom: '24px', padding: '20px' }}>
-        <span className="panel-title" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Load Your Own Data</span>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
-          Upload Spotify data files (e.g., <code>StreamingHistory*.json</code>, <code>Playlist*.json</code>) or custom <code>.csv</code> / Excel (<code>.xlsx</code>, <code>.xls</code>) files (with <code>Track, Artist, Playlist</code> headers or simple format).
-        </p>
-        
-        <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <label className="btn btn-primary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Choose Files to Upload
-            <input 
-              type="file" 
-              multiple 
-              accept=".json,.csv,.xlsx,.xls" 
-              onChange={handleFileUpload} 
-              style={{ display: 'none' }}
-              disabled={uploading}
-            />
-          </label>
-          
-          {uploadStatus && (
-            <span style={{ fontSize: '0.9rem', color: uploading ? 'var(--accent-blue)' : 'var(--text-color)', fontWeight: 500 }}>
-              {uploadStatus}
-            </span>
-          )}
-        </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Load Your Own Data</CardTitle>
+          <CardDescription>
+            Upload Spotify data files (e.g., StreamingHistory*.json, Playlist*.json) or custom .csv / Excel files (with Track, Artist, Playlist headers or simple format).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <Button asChild disabled={uploading}>
+              <label className="cursor-pointer">
+                <svg className="mr-2 size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Choose Files to Upload
+                <input 
+                  type="file" 
+                  multiple 
+                  accept=".json,.csv,.xlsx,.xls" 
+                  onChange={handleFileUpload} 
+                  className="hidden"
+                  disabled={uploading}
+                />
+              </label>
+            </Button>
+            
+            {uploadStatus && (
+              <span className={`text-sm font-medium ${uploading ? 'text-primary' : 'text-foreground'}`}>
+                {uploadStatus}
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {loadingStats ? (
-        <div style={{ textAlign: 'center', padding: '40px' }} className="pulse">
+        <div className="text-center p-10 animate-pulse text-muted-foreground">
           <p>Aggregating Spotify stats from history...</p>
         </div>
       ) : stats ? (
-        <>
+        <div className="flex flex-col gap-6">
           {/* Stats Cards */}
-          <div className="stats-grid">
-            <div className="stat-card">
-              <span className="stat-label">Total Listening Time</span>
-              <span className="stat-value music">{stats.totalHours} <span style={{ fontSize: '1rem', fontWeight: 500 }}>Hrs</span></span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Music Playtime</span>
-              <span className="stat-value purple">{stats.totalMusicHours} <span style={{ fontSize: '1rem', fontWeight: 500 }}>Hrs</span></span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Podcast Playtime</span>
-              <span className="stat-value blue">{stats.totalPodcastHours} <span style={{ fontSize: '1rem', fontWeight: 500 }}>Hrs</span></span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Unique Artists</span>
-              <span className="stat-value">{stats.uniqueArtists}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Unique Tracks</span>
-              <span className="stat-value">{stats.uniqueTracks}</span>
-            </div>
+          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Total Listening Time</CardDescription>
+                <CardTitle className="text-2xl">{stats.totalHours} <span className="text-sm font-normal text-muted-foreground">Hrs</span></CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Music Playtime</CardDescription>
+                <CardTitle className="text-2xl text-purple-500">{stats.totalMusicHours} <span className="text-sm font-normal text-muted-foreground">Hrs</span></CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Podcast Playtime</CardDescription>
+                <CardTitle className="text-2xl text-blue-500">{stats.totalPodcastHours} <span className="text-sm font-normal text-muted-foreground">Hrs</span></CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Unique Artists</CardDescription>
+                <CardTitle className="text-2xl">{stats.uniqueArtists}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Unique Tracks</CardDescription>
+                <CardTitle className="text-2xl">{stats.uniqueTracks}</CardTitle>
+              </CardHeader>
+            </Card>
           </div>
 
-          {/* Dashboard Lists */}
-          <div className="dashboard-grid">
+          <div className="grid gap-6 md:grid-cols-2">
             {/* Top Artists Panel */}
-            <div className="panel">
-              <div className="panel-header">
-                <span className="panel-title">Top Artists</span>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Top 20</span>
-              </div>
-              <div className="ranking-list">
+            <Card>
+              <CardHeader>
+                <CardTitle>Top Artists</CardTitle>
+                <CardDescription>Top 20</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 {stats.topArtists.slice(0, 10).map((artist, idx) => {
                   const maxHours = stats.topArtists[0]?.hours || 1;
                   const percentage = (artist.hours / maxHours) * 100;
                   return (
-                    <div className="ranking-item" key={artist.name}>
-                      <div className="ranking-meta">
-                        <span className="ranking-name">{idx + 1}. {artist.name}</span>
-                        <span className="ranking-value">{artist.hours} hrs</span>
+                    <div key={artist.name} className="flex flex-col gap-1.5">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="font-medium truncate pr-4">{idx + 1}. {artist.name}</span>
+                        <span className="text-muted-foreground shrink-0">{artist.hours} hrs</span>
                       </div>
-                      <div className="ranking-bar-bg">
-                        <div 
-                          className="ranking-bar-fill primary" 
-                          style={{ width: `${percentage}%` }}
-                        ></div>
-                      </div>
+                      <Progress value={percentage} className="h-2" />
                     </div>
                   );
                 })}
                 {stats.topArtists.length === 0 && (
-                  <p style={{ color: 'var(--text-muted)', textAlign: 'center' }}>No artist data found.</p>
+                  <p className="text-muted-foreground text-center py-4">No artist data found.</p>
                 )}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             {/* Top Tracks Panel */}
-            <div className="panel">
-              <div className="panel-header">
-                <span className="panel-title">Top Tracks</span>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Top 20</span>
-              </div>
-              <div className="tracks-table-wrapper">
-                <table className="tracks-table">
-                  <thead>
-                    <tr>
-                      <th>Track Info</th>
-                      <th style={{ textAlign: 'right' }}>Playtime</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+            <Card>
+              <CardHeader>
+                <CardTitle>Top Tracks</CardTitle>
+                <CardDescription>Top 20</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Track Info</TableHead>
+                      <TableHead className="text-right">Playtime</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {stats.topTracks.slice(0, 10).map((track, idx) => (
-                      <tr key={`${track.name}-${track.artist}`}>
-                        <td>
-                          <div className="ranking-name" style={{ fontWeight: 600 }}>{idx + 1}. {track.name}</div>
-                          <div className="track-artist">{track.artist} • <span style={{ fontSize: '0.8rem' }}>{track.album}</span></div>
-                        </td>
-                        <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>
+                      <TableRow key={`${track.name}-${track.artist}`}>
+                        <TableCell>
+                          <div className="font-semibold">{idx + 1}. {track.name}</div>
+                          <div className="text-sm text-muted-foreground">{track.artist} • {track.album}</div>
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-muted-foreground">
                           {track.hours} hrs
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
                     {stats.topTracks.length === 0 && (
-                      <tr>
-                        <td colSpan="2" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No track data found.</td>
-                      </tr>
+                      <TableRow>
+                        <TableCell colSpan={2} className="text-center text-muted-foreground">No track data found.</TableCell>
+                      </TableRow>
                     )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Podcasts Panel if exists */}
           {stats.topPodcasts && stats.topPodcasts.length > 0 && (
-            <div className="panel">
-              <div className="panel-header">
-                <span className="panel-title">Top Podcasts</span>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>By Playtime</span>
-              </div>
-              <div className="ranking-list">
+            <Card>
+              <CardHeader>
+                <CardTitle>Top Podcasts</CardTitle>
+                <CardDescription>By Playtime</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {stats.topPodcasts.map((podcast, idx) => {
                   const maxHours = stats.topPodcasts[0]?.hours || 1;
                   const percentage = (podcast.hours / maxHours) * 100;
                   return (
-                    <div className="ranking-item" key={podcast.name}>
-                      <div className="ranking-meta">
-                        <span className="ranking-name">{idx + 1}. {podcast.name}</span>
-                        <span className="ranking-value">{podcast.hours} hrs</span>
+                    <div key={podcast.name} className="flex flex-col gap-1.5 p-3 rounded-lg border bg-card">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="font-medium truncate pr-2">{idx + 1}. {podcast.name}</span>
+                        <span className="text-muted-foreground shrink-0">{podcast.hours} hrs</span>
                       </div>
-                      <div className="ranking-bar-bg">
-                        <div 
-                          className="ranking-bar-fill purple" 
-                          style={{ width: `${percentage}%` }}
-                        ></div>
-                      </div>
+                      <Progress value={percentage} className="h-1.5 [&>div]:bg-purple-500" />
                     </div>
                   );
                 })}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
-        </>
-      ) : (
-        <div className="panel" style={{ textAlign: 'center', padding: '40px' }}>
-          <h3>No Spotify Data Found</h3>
-          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
-            Please place your Spotify JSON files in the <code>spotify_data/</code> folder at the root of the project.
-          </p>
         </div>
+      ) : (
+        <Card className="text-center p-12">
+          <CardTitle className="mb-2">No Spotify Data Found</CardTitle>
+          <CardDescription>
+            Please place your Spotify JSON files in the <code className="bg-muted px-1 rounded">spotify_data/</code> folder at the root of the project.
+          </CardDescription>
+        </Card>
       )}
     </div>
   );

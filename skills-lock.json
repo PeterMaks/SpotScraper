@@ -55,6 +55,12 @@
       "skillPath": "skills/security-misconfiguration/SKILL.md",
       "computedHash": "6124d9571060992f1bb42338c1d9f1de08f42ebd16b179b13e30a9042ac518fe"
     },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "0dc0edeeaec2ae491ae506806517866a3f9bd48d04e0458feb37e0252862891f"
+    },
     "software-data-integrity-failures": {
       "source": "scholarly360/owasp-top10-web-skills",
       "sourceType": "github",

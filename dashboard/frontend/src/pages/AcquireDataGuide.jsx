@@ -5,6 +5,8 @@ import {
   FileJson, Info, Music, ExternalLink, ArrowRight,
   DatabaseZap
 } from 'lucide-react';
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 
 export default function AcquireDataGuide() {
   const [activeTab, setActiveTab] = useState('full');
@@ -19,297 +21,116 @@ export default function AcquireDataGuide() {
   ];
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      padding: '40px 24px',
-      width: '100%'
-    }}>
-      {/* Header */}
-      <header style={{
-        textAlign: 'center',
-        marginBottom: '64px',
-        maxWidth: '800px',
-        animation: 'fadeInUp 0.8s ease-out forwards'
-      }}>
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '12px',
-          marginBottom: '32px',
-          padding: '12px 24px',
-          background: 'rgba(255, 255, 255, 0.05)',
-          borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
-        }}>
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '8px',
-            background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent-blue) 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#FFF'
-          }}>
+    <div className="flex flex-col items-center py-10 px-6 w-full animate-in fade-in duration-500">
+      <header className="text-center mb-16 max-w-3xl">
+        <div className="inline-flex items-center gap-3 mb-8 px-6 py-3 bg-secondary/50 border rounded-2xl shadow-sm">
+          <div className="flex size-8 rounded-lg bg-gradient-to-br from-primary to-blue-500 items-center justify-center text-white">
             <DatabaseZap size={20} />
           </div>
-          <span style={{
-            fontSize: '24px',
-            fontWeight: 800,
-            letterSpacing: '-0.02em',
-            color: '#FFF'
-          }}>
-            SpotScraper
-          </span>
+          <span className="text-2xl font-extrabold tracking-tight">SpotScraper</span>
         </div>
-        <h1 style={{ 
-          fontSize: '48px', 
-          fontWeight: 800, 
-          letterSpacing: '-0.04em',
-          marginBottom: '16px',
-          background: 'linear-gradient(135deg, #FFF 0%, #B3B3B3 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent'
-        }}>
-          Acquire Your Audio Footprint
-        </h1>
-        <p style={{
-          fontSize: '18px',
-          color: 'var(--text-muted)',
-          maxWidth: '600px',
-          margin: '0 auto',
-          textWrap: 'balance'
-        }}>
+        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">Acquire Your Audio Footprint</h1>
+        <p className="text-lg text-muted-foreground max-w-2xl mx-auto text-balance">
           Whether you need your complete extended streaming history in JSON or just your playlists, follow the guides below to securely export your data.
         </p>
       </header>
 
-      {/* Toggle / Tabs */}
-      <div style={{
-        display: 'flex',
-        position: 'relative',
-        background: 'rgba(255, 255, 255, 0.05)',
-        padding: '6px',
-        borderRadius: '100px',
-        marginBottom: '48px',
-        border: '1px solid rgba(255,255,255,0.05)',
-        backdropFilter: 'blur(10px)',
-        width: '400px'
-      }}>
-        {/* Sliding Pill Background */}
-        <div style={{
-          position: 'absolute',
-          top: '6px',
-          bottom: '6px',
-          left: activeTab === 'full' ? '6px' : '50%',
-          right: activeTab === 'full' ? '50%' : '6px',
-          background: 'rgba(255,255,255,0.1)',
-          borderRadius: '100px',
-          transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-          zIndex: 0
-        }} />
-        
-        <button 
+      <div className="flex relative bg-secondary/50 p-1.5 rounded-full mb-12 border w-full max-w-md mx-auto">
+        <Button 
+          variant={activeTab === 'full' ? 'default' : 'ghost'} 
+          className="flex-1 rounded-full text-sm font-semibold h-10"
           onClick={() => setActiveTab('full')}
-          style={{
-            position: 'relative',
-            zIndex: 1,
-            flex: 1,
-            padding: '12px 32px',
-            borderRadius: '100px',
-            border: 'none',
-            background: 'transparent',
-            color: activeTab === 'full' ? '#FFF' : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '15px',
-            cursor: 'pointer',
-            transition: 'color 0.4s ease',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px'
-          }}>
-          <Database size={18} />
-          Full JSON Data
-        </button>
-        <button 
+        >
+          <Database size={16} className="mr-2" /> Full JSON Data
+        </Button>
+        <Button 
+          variant={activeTab === 'playlists' ? 'default' : 'ghost'} 
+          className="flex-1 rounded-full text-sm font-semibold h-10"
           onClick={() => setActiveTab('playlists')}
-          style={{
-            position: 'relative',
-            zIndex: 1,
-            flex: 1,
-            padding: '12px 32px',
-            borderRadius: '100px',
-            border: 'none',
-            background: 'transparent',
-            color: activeTab === 'playlists' ? '#FFF' : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '15px',
-            cursor: 'pointer',
-            transition: 'color 0.4s ease',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px'
-          }}>
-          <ListMusic size={18} />
-          Playlists Only
-        </button>
+        >
+          <ListMusic size={16} className="mr-2" /> Playlists Only
+        </Button>
       </div>
 
-      {/* Main Content Area */}
-      <div style={{
-        width: '100%',
-        maxWidth: '900px',
-        position: 'relative',
-        minHeight: '400px'
-      }}>
+      <div className="w-full max-w-4xl mx-auto">
         {activeTab === 'full' && (
-          <div className="glass-card animate-fade-in" style={{ padding: '48px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '16px', background: 'rgba(29, 185, 84, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+          <Card className="p-8 border bg-card">
+            <div className="flex items-center gap-4 mb-8">
+              <div className="flex size-12 rounded-xl bg-primary/15 items-center justify-center text-primary">
                 <FileJson size={24} />
               </div>
               <div>
-                <h2 style={{ fontSize: '24px', fontWeight: 700 }}>Download Your Data Tool</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '15px', margin: 0 }}>Official method via Privacy Settings</p>
+                <h2 className="text-2xl font-bold">Download Your Data Tool</h2>
+                <p className="text-muted-foreground text-sm">Official method via Privacy Settings</p>
               </div>
             </div>
 
-            <p style={{ color: '#E0E0E0', marginBottom: '32px', fontSize: '16px' }}>
+            <p className="text-foreground mb-8 text-base">
               To request a copy of your personal data (including extended streaming history, playlists, and account details) from Spotify, use the "Download your data" tool in your Privacy Settings.
             </p>
 
-            <h3 style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--primary)', marginBottom: '24px', fontWeight: 700 }}>Follow these steps:</h3>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-primary mb-6">Follow these steps:</h3>
 
-            <div style={{ display: 'grid', gap: '16px', marginBottom: '48px' }}>
+            <div className="grid gap-4 mb-12">
               {steps.map((step, idx) => (
-                <div key={idx} style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '20px',
-                  padding: '20px',
-                  background: 'rgba(0,0,0,0.2)',
-                  borderRadius: '16px',
-                  border: '1px solid rgba(255,255,255,0.03)'
-                }}>
-                  <div style={{ 
-                    color: 'var(--text-muted)', 
-                    background: 'rgba(255,255,255,0.05)', 
-                    padding: '10px', 
-                    borderRadius: '12px' 
-                  }}>
+                <div key={idx} className="flex items-start gap-4 p-5 bg-secondary/30 rounded-2xl border">
+                  <div className="text-muted-foreground bg-background p-2.5 rounded-xl border">
                     {step.icon}
                   </div>
-                  <p style={{ fontSize: '16px', color: '#FFF', paddingTop: '8px', margin: 0 }}>{step.text}</p>
+                  <p className="text-base pt-2">{step.text}</p>
                 </div>
               ))}
             </div>
 
-            <div style={{
-              padding: '24px',
-              borderRadius: '16px',
-              background: 'linear-gradient(145deg, rgba(29, 185, 84, 0.1) 0%, rgba(29, 185, 84, 0.02) 100%)',
-              border: '1px solid rgba(29, 185, 84, 0.2)',
-              display: 'flex',
-              gap: '20px'
-            }}>
-              <div style={{ color: 'var(--primary)', paddingTop: '4px' }}>
+            <div className="p-6 rounded-2xl bg-primary/5 border border-primary/20 flex gap-5">
+              <div className="text-primary pt-1">
                 <Info size={24} />
               </div>
               <div>
-                <h4 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px', color: '#FFF' }}>What happens next</h4>
-                <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '15px', lineHeight: 1.6, margin: 0 }}>
-                  Spotify will compile your data and send you an email containing a secure download link. <strong>This process can take up to 30 days.</strong> Once you receive the email, download the ZIP file, which will contain your data in easily readable JSON files.
+                <h4 className="text-lg font-bold mb-2">What happens next</h4>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Spotify will compile your data and send you an email containing a secure download link. <strong className="text-foreground">This process can take up to 30 days.</strong> Once you receive the email, download the ZIP file, which will contain your data in easily readable JSON files.
                 </p>
               </div>
             </div>
-          </div>
+          </Card>
         )}
 
         {activeTab === 'playlists' && (
-          <div className="glass-card animate-fade-in" style={{ padding: '48px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '16px', background: 'rgba(144, 89, 255, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-purple)' }}>
+          <Card className="p-8 border bg-card text-center flex flex-col items-center">
+            <div className="flex items-center gap-4 mb-8 self-start text-left w-full">
+              <div className="flex size-12 rounded-xl bg-purple-500/15 items-center justify-center text-purple-500">
                 <Music size={24} />
               </div>
               <div>
-                <h2 style={{ fontSize: '24px', fontWeight: 700 }}>Exportify for Playlists</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '15px', margin: 0 }}>Fastest method for playlist metadata</p>
+                <h2 className="text-2xl font-bold">Exportify for Playlists</h2>
+                <p className="text-muted-foreground text-sm">Fastest method for playlist metadata</p>
               </div>
             </div>
 
-            <p style={{ color: '#E0E0E0', marginBottom: '48px', fontSize: '16px', lineHeight: 1.6 }}>
+            <p className="text-foreground mb-12 text-base text-left w-full">
               If you only need your playlists and don't want to wait 30 days for Spotify's full archive, <strong>Exportify</strong> is a secure third-party tool that connects to the Spotify API and instantly generates CSV files of your playlists.
             </p>
 
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '32px',
-              padding: '48px 24px',
-              background: 'rgba(0,0,0,0.2)',
-              borderRadius: '24px',
-              border: '1px solid rgba(255,255,255,0.03)',
-              textAlign: 'center'
-            }}>
-              <div style={{ 
-                width: '80px', 
-                height: '80px', 
-                borderRadius: '24px', 
-                background: 'linear-gradient(135deg, rgba(144,89,255,0.2) 0%, rgba(46,119,208,0.2) 100%)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#FFF',
-                boxShadow: '0 8px 32px rgba(144,89,255,0.2)'
-              }}>
+            <div className="flex flex-col items-center gap-8 p-12 bg-secondary/30 rounded-3xl border w-full">
+              <div className="flex size-20 rounded-3xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 border items-center justify-center text-foreground shadow-lg">
                 <ExternalLink size={32} />
               </div>
               
               <div>
-                <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>exportify.net</h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '15px', maxWidth: '400px', margin: 0 }}>
+                <h3 className="text-xl font-bold mb-2">exportify.net</h3>
+                <p className="text-muted-foreground text-sm max-w-sm mx-auto">
                   Login securely with Spotify to view and export any of your saved playlists instantly.
                 </p>
               </div>
 
-              <a 
-                href="https://exportify.net" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '16px 32px',
-                  background: 'var(--text-main)',
-                  color: 'var(--bg-base)',
-                  borderRadius: '100px',
-                  textDecoration: 'none',
-                  fontWeight: 700,
-                  fontSize: '16px',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  boxShadow: '0 8px 24px rgba(255,255,255,0.2)'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.transform = 'scale(1.05) translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 12px 32px rgba(255,255,255,0.3)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.transform = 'scale(1) translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(255,255,255,0.2)';
-                }}
-              >
-                Launch Exportify <ArrowRight size={18} />
-              </a>
+              <Button asChild size="lg" className="rounded-full px-8 h-14 text-base font-bold shadow-xl shadow-primary/20 hover:scale-105 transition-transform">
+                <a href="https://exportify.net" target="_blank" rel="noopener noreferrer">
+                  Launch Exportify <ArrowRight size={18} className="ml-2" />
+                </a>
+              </Button>
             </div>
-          </div>
+          </Card>
         )}
       </div>
     </div>
