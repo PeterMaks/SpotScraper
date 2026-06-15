@@ -222,7 +222,7 @@ export default function ScraperControl() {
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select data source..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)]">
                     <SelectItem value="all">All files in spotify_data</SelectItem>
                     {sourceFiles.map(file => (
                       <SelectItem key={file} value={file}>{file}</SelectItem>
@@ -315,20 +315,18 @@ export default function ScraperControl() {
                 </div>
 
                 {/* Terminal */}
-                {showTerminal && (
-                  <div className="bg-black/80 backdrop-blur-xl border-t border-white/10 text-zinc-50 font-mono text-xs p-4 flex-1 overflow-y-auto max-h-[300px] flex flex-col shadow-inner">
-                    <div className="flex items-center gap-1.5 mb-3 sticky top-0 bg-black/80 backdrop-blur-md pb-2 z-10 rounded-b-lg -mx-2 px-2 -mt-2 pt-2">
-                      <span className="size-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
-                      <span className="size-2.5 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)]" />
-                      <span className="size-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
-                      <span className="ml-2 text-zinc-400 drop-shadow-sm">scraper output</span>
-                    </div>
-                    <pre className="whitespace-pre-wrap flex-1">
-                      {scraperOutput}
-                      <span ref={terminalEndRef} />
-                    </pre>
+                <div className={`bg-black/80 backdrop-blur-xl text-zinc-50 font-mono text-xs flex flex-col shadow-inner t-resize-height overflow-y-auto custom-scrollbar ${showTerminal ? 'max-h-[300px] p-4 border-t border-white/10' : 'max-h-0 p-0 border-t-0 border-transparent'}`}>
+                  <div className="flex items-center gap-1.5 mb-3 sticky top-0 bg-black/80 backdrop-blur-md pb-2 z-10 rounded-b-lg -mx-2 px-2 -mt-2 pt-2">
+                    <span className="size-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+                    <span className="size-2.5 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)]" />
+                    <span className="size-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
+                    <span className="ml-2 text-zinc-400 drop-shadow-sm">scraper output</span>
                   </div>
-                )}
+                  <pre className="whitespace-pre-wrap flex-1">
+                    {scraperOutput}
+                    <span ref={terminalEndRef} />
+                  </pre>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center flex-1 p-12 text-center text-muted-foreground">

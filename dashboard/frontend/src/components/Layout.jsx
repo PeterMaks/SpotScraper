@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 
 function ThemeToggle({ className }) {
   const { theme, setTheme } = useTheme();
+  const stateVal = theme === 'dark' ? 'a' : 'b';
   return (
     <Button 
       variant="ghost" 
@@ -17,7 +18,14 @@ function ThemeToggle({ className }) {
       onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       title="Toggle Theme"
     >
-      {theme === 'dark' ? <Icons.Sun className="size-4 text-foreground/70" /> : <Icons.Moon className="size-4 text-foreground/70" />}
+      <span className="t-icon-swap" data-state={stateVal}>
+        <span className="t-icon" data-icon="a">
+          <Icons.Sun className="size-4 text-foreground/70" />
+        </span>
+        <span className="t-icon" data-icon="b">
+          <Icons.Moon className="size-4 text-foreground/70" />
+        </span>
+      </span>
     </Button>
   );
 }
@@ -191,8 +199,15 @@ export default function Layout() {
                   <Button variant="ghost" size="icon" className="hover:bg-white/10 rounded-full" onClick={handlePlayPrev} disabled={downloads.length === 0} title="Previous">
                     <Icons.SkipBack className="size-4" />
                   </Button>
-                  <Button variant="outline" size="icon" className="size-9 rounded-full bg-background/50 backdrop-blur-md border-white/20 shadow-md hover:bg-white/20" onClick={() => currentTrack && setIsPlaying(!isPlaying)} disabled={!currentTrack}>
-                    {isPlaying ? <Icons.Pause className="size-4" /> : <Icons.Play className="size-4 translate-x-0.5" />}
+                  <Button variant="outline" size="icon" className="size-9 rounded-full bg-background/50 backdrop-blur-md border-white/20 shadow-md hover:bg-white/20 flex items-center justify-center" onClick={() => currentTrack && setIsPlaying(!isPlaying)} disabled={!currentTrack}>
+                    <span className="t-icon-swap" data-state={isPlaying ? 'a' : 'b'}>
+                      <span className="t-icon" data-icon="a">
+                        <Icons.Pause className="size-4" />
+                      </span>
+                      <span className="t-icon" data-icon="b">
+                        <Icons.Play className="size-4 translate-x-0.5" />
+                      </span>
+                    </span>
                   </Button>
                   <Button variant="ghost" size="icon" className="hover:bg-white/10 rounded-full" onClick={handlePlayNext} disabled={downloads.length === 0} title="Next">
                     <Icons.SkipForward className="size-4" />

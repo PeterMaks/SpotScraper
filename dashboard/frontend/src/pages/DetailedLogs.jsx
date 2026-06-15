@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../AppContext';
 import * as Icons from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -10,6 +10,46 @@ export default function DetailedLogs() {
   const { logs, fetchLogs, loadingLogs, logsFilter, setLogsFilter, logsSearch, setLogsSearch, backendUrl } = useAppContext();
   const [selectedLogs, setSelectedLogs] = useState(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
+
+  const [activeRect, setActiveRect] = useState({ left: 0, width: 0, isInitial: true });
+  const containerRef = useRef(null);
+  const tabRefs = useRef({});
+
+  useEffect(() => {
+    const activeTab = tabRefs.current[logsFilter];
+    const container = containerRef.current;
+    if (activeTab && container) {
+      const update = () => {
+        const parentRect = container.getBoundingClientRect();
+        const tabRect = activeTab.getBoundingClientRect();
+        setActiveRect({
+          left: tabRect.left - parentRect.left,
+          width: tabRect.width,
+          isInitial: false
+        });
+      };
+      const raf = requestAnimationFrame(update);
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [logsFilter, logs]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const activeTab = tabRefs.current[logsFilter];
+      const container = containerRef.current;
+      if (activeTab && container) {
+        const parentRect = container.getBoundingClientRect();
+        const tabRect = activeTab.getBoundingClientRect();
+        setActiveRect(prev => ({
+          left: tabRect.left - parentRect.left,
+          width: tabRect.width,
+          isInitial: prev.isInitial
+        }));
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [logsFilter]);
 
   useEffect(() => { fetchLogs(); }, []);
 
@@ -134,11 +174,27 @@ export default function DetailedLogs() {
       </div>
 
       <div className="flex justify-between items-center gap-4 flex-wrap">
-        <div className="flex gap-2 flex-wrap">
+        <div ref={containerRef} className="t-tabs" role="tablist">
+          <span 
+            className="t-tabs-pill" 
+            style={{ 
+              transform: `translateX(${activeRect.left}px)`, 
+              width: `${activeRect.width}px`,
+              transition: activeRect.isInitial ? 'none' : undefined 
+            }} 
+            aria-hidden="true" 
+          />
           {['ALL', 'DOWNLOADED', 'NOT_FOUND', 'ERROR', 'SKIPPED/MISMATCH/UNKNOWN'].map(status => (
-            <Button key={status} variant={logsFilter === status ? "default" : "secondary"} className="rounded-full h-8 px-4 text-xs" onClick={() => setLogsFilter(status)}>
+            <button 
+              key={status}
+              ref={el => tabRefs.current[status] = el}
+              role="tab"
+              aria-selected={logsFilter === status}
+              className="t-tab" 
+              onClick={() => setLogsFilter(status)}
+            >
               {status}
-            </Button>
+            </button>
           ))}
         </div>
         <div className="w-72">
