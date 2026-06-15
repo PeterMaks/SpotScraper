@@ -431,40 +431,22 @@ def is_artist_match(target_artist, title, uploader, channel=None):
     if not target_artist:
         return True
     
-    norm_artist = normalize_text(target_artist)
-    if not norm_artist:
-        return True
-        
-    norm_title = normalize_text(title)
-    norm_uploader = normalize_text(uploader)
-    norm_channel = normalize_text(channel) if channel else ""
+    import re
+    import unicodedata
+    # ponytail: split by featuring keywords, commas, and semicolons to get the primary artist
+    primary = re.split(r'\b(?:feat\.?|featuring)\b|[;,]\s*', target_artist, flags=re.IGNORECASE)[0].strip()
     
-    # 1. Full normalized artist containment check
-    if norm_artist in norm_title or norm_artist in norm_uploader or norm_artist in norm_channel:
+    # remove diacritics/accents and tokenize
+    norm_primary = "".join(c for c in unicodedata.normalize('NFD', primary.lower()) if unicodedata.category(c) != 'Mn')
+    words = set(re.findall(r'\b\w+\b', norm_primary)) - {'the', 'and', 'a', '&'}
+    if not words:
         return True
         
-    # 2. Strip "the" prefix if present
-    lower_artist = target_artist.lower().strip()
-    if lower_artist.startswith("the "):
-        norm_artist_no_the = normalize_text(lower_artist[4:])
-        if norm_artist_no_the and (norm_artist_no_the in norm_title or norm_artist_no_the in norm_uploader or norm_artist_no_the in norm_channel):
-            return True
-            
-    # 3. Word-by-word matching for multi-word artists
-    words = [w for w in lower_artist.split() if w not in ('the', 'and', 'feat', '&', 'official', 'music', 'video')]
-    if words:
-        all_words_match = True
-        for w in words:
-            clean_w = normalize_text(w)
-            if not clean_w:
-                continue
-            if clean_w not in norm_title and clean_w not in norm_uploader and clean_w not in norm_channel:
-                all_words_match = False
-                break
-        if all_words_match:
-            return True
-            
-    return False
+    target_text = (title + " " + uploader + " " + (channel or "")).lower()
+    norm_target = "".join(c for c in unicodedata.normalize('NFD', target_text) if unicodedata.category(c) != 'Mn')
+    clean_target = set(re.findall(r'\b\w+\b', norm_target))
+    
+    return words.issubset(clean_target)
 
 def is_track_match(target_track, video_title):
     if not target_track:
@@ -480,6 +462,10 @@ def is_track_match(target_track, video_title):
     norm_title_clean = "".join(clean_title_words)
     
     if not norm_target or not norm_title_clean:
+        return True
+        
+    # ponytail: check simple substring containment to ignore artist prefix/suffix order
+    if norm_target in norm_title_clean:
         return True
         
     # Check if similarity is above 65%
