@@ -1,7 +1,13 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs-extra');
+const fs = require('fs').promises;
+const fsSync = require('fs');
+fs.pathExists = async (p) => { try { await fs.access(p); return true; } catch { return false; } };
+fs.readJson = async (p) => JSON.parse(await fs.readFile(p, 'utf8'));
+fs.writeJson = async (p, d, o) => fs.writeFile(p, JSON.stringify(d, null, o?.spaces||0), 'utf8');
+fs.ensureDir = async (p) => fs.mkdir(p, { recursive: true });
+fs.remove = async (p) => fs.rm(p, { recursive: true, force: true });
 const { spawn } = require('child_process');
 const { aggregateStats } = require('./parser');
 const logger = require('./logger');
@@ -42,48 +48,16 @@ function formatDurationMs(ms) {
   return `${m}m ${s}s`;
 }
 
-function parseCSVLine(line) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  result.push(current.trim());
-  return result;
-}
-
 function parseCSV(content) {
-  const lines = content.split(/\r?\n/);
+  const lines = content.split(/\r?\n/).filter(l => l.trim());
   if (lines.length === 0) return [];
-  
-  const results = [];
-  const headers = parseCSVLine(lines[0]);
-  
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const values = parseCSVLine(line);
-    const row = {};
-    headers.forEach((header, idx) => {
-      row[header] = values[idx] || '';
-    });
-    results.push(row);
-  }
-  return results;
+  const parseLine = l => l.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+  const headers = parseLine(lines[0]);
+  return lines.slice(1).map(l => {
+    const vals = parseLine(l), row = {};
+    headers.forEach((h, i) => row[h] = vals[i] || '');
+    return row;
+  });
 }
 
 let cachedUserMetadata = null;
@@ -269,27 +243,14 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// Helper function to recursively read files in a directory
-async function getFilesRecursive(dir) {
-  let results = [];
-  const list = await fs.readdir(dir);
-  for (const file of list) {
-    const filePath = path.join(dir, file);
-    const stat = await fs.stat(filePath);
-    if (stat && stat.isDirectory()) {
-      results = results.concat(await getFilesRecursive(filePath));
-    } else {
-      results.push(filePath);
-    }
-  }
-  return results;
-}
+
 
 // List files in the downloads directory recursively
 app.get('/api/downloads', async (req, res) => {
   try {
     await fs.ensureDir(downloadsDir);
-    const filePaths = await getFilesRecursive(downloadsDir);
+    const ents = await fs.readdir(downloadsDir, { recursive: true, withFileTypes: true });
+    const filePaths = ents.filter(e => e.isFile()).map(e => path.join(e.parentPath || e.path, e.name));
     
     // Load metadata from root cache files
     const rootDir = path.join(__dirname, '../..');
@@ -705,7 +666,7 @@ app.post('/api/scrape/start', (req, res, next) => {
     const safeSourceFile = sourceFile ? path.basename(sourceFile) : null;
 
     if (processType === 'selenium') {
-      scriptPath = path.join(rootDir, 'qobuz_scrapper.py');
+      scriptPath = path.join(rootDir, 'Scraper.py');
       if (query) {
         args = ['query', query];
       } else {

@@ -1,9 +1,9 @@
 const winston = require('winston');
 const path = require('path');
-const fs = require('fs-extra');
+const fs = require('fs');
 
 const logsDir = path.join(__dirname, 'logs');
-fs.ensureDirSync(logsDir);
+fs.mkdirSync(logsDir, { recursive: true });
 
 // Custom Winstron formatter to strip newlines and ANSI escape sequences from logs
 const sanitizeFormat = winston.format((info) => {

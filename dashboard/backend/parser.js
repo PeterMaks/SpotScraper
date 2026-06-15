@@ -1,4 +1,4 @@
-const fs = require('fs-extra');
+const fs = require('fs').promises;
 const path = require('path');
 
 async function aggregateStats() {
@@ -16,7 +16,8 @@ async function aggregateStats() {
   };
 
   try {
-    if (!(await fs.pathExists(dataDir))) {
+    const dirExists = await fs.access(dataDir).then(() => true).catch(() => false);
+    if (!dirExists) {
       console.warn(`Spotify data directory not found at ${dataDir}`);
       return {
         totalHours: 0,
@@ -35,7 +36,7 @@ async function aggregateStats() {
 
     for (const file of files) {
       const filePath = path.join(dataDir, file);
-      const data = await fs.readJson(filePath);
+      const data = JSON.parse(await fs.readFile(filePath, 'utf8'));
 
       if (Array.isArray(data)) {
         for (const entry of data) {

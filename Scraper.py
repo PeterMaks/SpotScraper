@@ -10,9 +10,6 @@ import sys
 import io
 import difflib
 
-# Force UTF-8 encoding for standard output and error to avoid Windows terminal encoding crashes
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 import logging
 from pythonjsonlogger import jsonlogger
@@ -62,16 +59,11 @@ def emit_log(log_type, key, data):
         print(f"Error emitting log: {e}")
 
 def build_dir_cache(downloads_dir="downloads"):
-    dir_cache = {}
-    if not os.path.exists(downloads_dir):
-        return dir_cache
-    for root, dirs, files in os.walk(downloads_dir):
-        for file in files:
-            if file.endswith('.mp3'):
-                filename_no_ext = os.path.splitext(file)[0]
-                clean_filename = "".join(c for c in filename_no_ext if c.isalnum()).lower()
-                dir_cache[clean_filename] = os.path.join(root, file)
-    return dir_cache
+    import pathlib
+    return {
+        "".join(c for c in p.stem if c.isalnum()).lower(): str(p)
+        for p in pathlib.Path(downloads_dir).rglob("*.mp3")
+    }
 
 def parse_excel_file(filepath):
     """
@@ -232,43 +224,21 @@ def parse_spotify_data(json_directory, specific_file=None):
                         except Exception:  # nosec B110 - Sniffer throws if header/delimiter is undetectable; fallback is safe
                             pass
                         
-                        reader = csv.reader(f)
                         if has_header:
-                            headers = [h.strip().lower() for h in next(reader)]
-                            track_idx, artist_idx, playlist_idx, uri_idx = -1, -1, -1, -1
-                            album_idx, duration_idx, release_date_idx = -1, -1, -1
-                            for idx, h in enumerate(headers):
-                                if h in ('track', 'song', 'title', 'name', 'track name', 'song name'):
-                                    track_idx = idx
-                                elif h in ('artist', 'singer', 'band', 'artist name', 'artist name(s)', 'artists'):
-                                    artist_idx = idx
-                                elif h in ('playlist', 'folder', 'category', 'playlist name'):
-                                    playlist_idx = idx
-                                elif h in ('uri', 'track uri', 'id', 'spotify uri'):
-                                    uri_idx = idx
-                                elif h in ('album', 'album name'):
-                                    album_idx = idx
-                                elif h in ('duration', 'duration (ms)', 'duration_ms', 'ms'):
-                                    duration_idx = idx
-                                elif h in ('release date', 'release_date', 'released'):
-                                    release_date_idx = idx
-                            
-                            for row in reader:
-                                if not row:
-                                    continue
-                                track = row[track_idx].strip() if track_idx != -1 and track_idx < len(row) else ""
-                                artist = row[artist_idx].strip() if artist_idx != -1 and artist_idx < len(row) else ""
-                                playlist = row[playlist_idx].strip() if playlist_idx != -1 and playlist_idx < len(row) else ""
-                                uri = row[uri_idx].strip() if uri_idx != -1 and uri_idx < len(row) else ""
-                                album = row[album_idx].strip() if album_idx != -1 and album_idx < len(row) else ""
-                                release_date = row[release_date_idx].strip() if release_date_idx != -1 and release_date_idx < len(row) else ""
-                                
-                                duration_ms = 0
-                                if duration_idx != -1 and duration_idx < len(row):
-                                    try:
-                                        duration_ms = int(row[duration_idx])
-                                    except ValueError:
-                                        pass
+                            f.seek(0)
+                            dict_reader = csv.DictReader(f)
+                            dict_reader.fieldnames = [h.strip().lower() for h in dict_reader.fieldnames] if dict_reader.fieldnames else []
+                            for row in dict_reader:
+                                track = (row.get('track') or row.get('song') or row.get('title') or row.get('name') or row.get('track name') or row.get('song name') or "").strip()
+                                artist = (row.get('artist') or row.get('singer') or row.get('band') or row.get('artist name') or row.get('artist name(s)') or row.get('artists') or "").strip()
+                                playlist = (row.get('playlist') or row.get('folder') or row.get('category') or row.get('playlist name') or "").strip()
+                                uri = (row.get('uri') or row.get('track uri') or row.get('id') or row.get('spotify uri') or "").strip()
+                                album = (row.get('album') or row.get('album name') or "").strip()
+                                release_date = (row.get('release date') or row.get('release_date') or row.get('released') or "").strip()
+                                try:
+                                    duration_ms = int(row.get('duration') or row.get('duration (ms)') or row.get('duration_ms') or row.get('ms') or 0)
+                                except ValueError:
+                                    duration_ms = 0
                                 
                                 duration_str = "-"
                                 if duration_ms > 0:
