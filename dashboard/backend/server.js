@@ -690,9 +690,9 @@ app.post('/api/scrape/start', (req, res, next) => {
     const venvWinPath = path.join(rootDir, '.venv', 'Scripts', 'python.exe');
     const venvNixPath = path.join(rootDir, '.venv', 'bin', 'python');
     
-    if (fs.existsSync(venvWinPath)) {
+    if (fsSync.existsSync(venvWinPath)) {
       pythonExecutable = venvWinPath;
-    } else if (fs.existsSync(venvNixPath)) {
+    } else if (fsSync.existsSync(venvNixPath)) {
       pythonExecutable = venvNixPath;
     }
 

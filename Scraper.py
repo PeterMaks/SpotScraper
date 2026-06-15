@@ -62,7 +62,7 @@ def build_dir_cache(downloads_dir="downloads"):
     import pathlib
     return {
         "".join(c for c in p.stem if c.isalnum()).lower(): str(p)
-        for p in pathlib.Path(downloads_dir).rglob("*.mp3")
+        for p in pathlib.Path(downloads_dir).rglob("*.*") if p.suffix in ['.mp3', '.m4a']
     }
 
 def parse_excel_file(filepath):
@@ -641,16 +641,13 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
             emit_log('downloadLinks', item, results[item])
             continue
             
+        ffmpeg_dir = r"C:\Users\ADMIN\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'ffmpeg_location': ffmpeg_dir if os.path.exists(ffmpeg_dir) else None,
+            'format': 'm4a/bestaudio/best',
             'outtmpl': os.path.join(track_download_dir, '%(title)s.%(ext)s'),
             'writethumbnail': True,
             'postprocessors': [
-                {
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
-                },
                 {
                     'key': 'FFmpegMetadata',
                     'add_metadata': True,
@@ -746,16 +743,15 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
                     new_file = None
                     try:
                         prepared_filename = ydl.prepare_filename(selected_entry)
-                        mp3_filename = os.path.splitext(prepared_filename)[0] + ".mp3"
-                        if os.path.exists(mp3_filename):
-                            new_file = mp3_filename
+                        if os.path.exists(prepared_filename):
+                            new_file = prepared_filename
                     except Exception as prep_err:
                         print(f"    (Warning preparing filename: {prep_err})")
                     
                     # Fallback scan: match downloaded file by YouTube title first, then check_already_downloaded
                     clean_yt_title = "".join(c for c in title if c.isalnum()).lower()
                     for file in os.listdir(track_download_dir):
-                        if file.endswith('.mp3'):
+                        if file.endswith(('.mp3', '.m4a')):
                             filepath = os.path.join(track_download_dir, file)
                             filename_no_ext = os.path.splitext(file)[0]
                             clean_filename = "".join(c for c in filename_no_ext if c.isalnum()).lower()
@@ -886,15 +882,14 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
                             new_file = None
                             try:
                                 prepared_filename = ydl.prepare_filename(fallback_entry)
-                                mp3_filename = os.path.splitext(prepared_filename)[0] + ".mp3"
-                                if os.path.exists(mp3_filename):
-                                    new_file = mp3_filename
+                                if os.path.exists(prepared_filename):
+                                    new_file = prepared_filename
                             except Exception as prep_err:
                                 print(f"    (Warning preparing filename: {prep_err})")
                             
                             clean_yt_title = "".join(c for c in title if c.isalnum()).lower()
                             for file in os.listdir(track_download_dir):
-                                if file.endswith('.mp3'):
+                                if file.endswith(('.mp3', '.m4a')):
                                     filepath = os.path.join(track_download_dir, file)
                                     filename_no_ext = os.path.splitext(file)[0]
                                     clean_filename = "".join(c for c in filename_no_ext if c.isalnum()).lower()
