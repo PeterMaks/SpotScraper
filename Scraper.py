@@ -1,14 +1,21 @@
 import json
 import os
+import re
 import time
-from datetime import datetime
+import hashlib
+import pathlib
+import urllib.request
 import urllib.parse
 import csv
+from datetime import datetime
 import yt_dlp
 import unicodedata
 import sys
 import io
 import difflib
+import threading
+import queue
+import openpyxl
 
 
 import logging
@@ -40,9 +47,6 @@ def save_cache(cache_dict):
         print(f"Error saving cache: {e}")
 
 def emit_log(log_type, key, data):
-    import urllib.request
-    import json
-    
     if isinstance(data, dict):
         data['source'] = 'api'
     
@@ -59,7 +63,6 @@ def emit_log(log_type, key, data):
         print(f"Error emitting log: {e}")
 
 def build_dir_cache(downloads_dir="downloads"):
-    import pathlib
     return {
         "".join(c for c in p.stem if c.isalnum()).lower(): str(p)
         for p in pathlib.Path(downloads_dir).rglob("*.*") if p.suffix in ['.mp3', '.m4a']
@@ -70,7 +73,6 @@ def parse_excel_file(filepath):
     Parses Excel (.xlsx / .xls) files and extracts query and playlist.
     """
     tracks = []
-    import openpyxl
     try:
         wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
         sheet = wb.active
@@ -132,7 +134,6 @@ def parse_excel_file(filepath):
                 if track:
                     query = f"{track} {artist}".strip()
                     if not uri:
-                        import hashlib
                         uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                     tracks.append({
                         "id": uri,
@@ -152,13 +153,11 @@ def parse_excel_file(filepath):
                     artist = cells[1]
                     playlist = cells[2] if len(cells) > 2 else ""
                     query = f"{track} {artist}".strip()
-                    import hashlib
                     uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                     tracks.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist, "release_date": ""})
                 elif len(cells) == 1 and cells[0]:
                     track = cells[0]
                     query = track
-                    import hashlib
                     uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                     tracks.append({"id": uri, "query": query, "track": track, "artist": "", "playlist": "", "release_date": ""})
     except Exception as e:
@@ -252,7 +251,6 @@ def parse_spotify_data(json_directory, specific_file=None):
                                     if query not in seen_queries:
                                         seen_queries.add(query)
                                         if not uri:
-                                            import hashlib
                                             uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                                         download_items.append({
                                             "id": uri,
@@ -275,7 +273,6 @@ def parse_spotify_data(json_directory, specific_file=None):
                                     query = f"{track} {artist}".strip()
                                     if query not in seen_queries:
                                         seen_queries.add(query)
-                                        import hashlib
                                         uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                                         download_items.append({"id": uri, "query": query, "track": track, "artist": artist, "playlist": playlist, "release_date": ""})
                                 elif len(row) == 1:
@@ -283,7 +280,6 @@ def parse_spotify_data(json_directory, specific_file=None):
                                     query = track
                                     if query not in seen_queries:
                                         seen_queries.add(query)
-                                        import hashlib
                                         uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                                         download_items.append({"id": uri, "query": query, "track": track, "artist": "", "playlist": "", "release_date": ""})
                 except Exception as e:
@@ -331,7 +327,6 @@ def parse_spotify_data(json_directory, specific_file=None):
                             if query not in seen_queries:
                                 seen_queries.add(query)
                                 playlist_name = track_to_playlist.get((track.lower().strip(), artist.lower().strip()), "")
-                                import hashlib
                                 uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                                 
                                 duration_str = "-"
@@ -355,7 +350,6 @@ def parse_spotify_data(json_directory, specific_file=None):
                             query = f"{episode} {show}"
                             if query not in seen_queries:
                                 seen_queries.add(query)
-                                import hashlib
                                 uri = "local:" + hashlib.sha256(query.encode('utf-8')).hexdigest()[:12]
                                 download_items.append({"id": uri, "query": query, "track": episode, "artist": show, "playlist": "Podcasts", "release_date": ""})
                                 
@@ -421,18 +415,11 @@ def check_already_downloaded(query, dir_cache, item_dict=None):
 
     return None
 
-def normalize_text(text):
-    if not text:
-        return ""
-    nfkd_form = unicodedata.normalize('NFKD', text)
-    return "".join(c for c in nfkd_form if c.isalnum()).lower()
 
 def is_artist_match(target_artist, title, uploader, channel=None):
     if not target_artist:
         return True
     
-    import re
-    import unicodedata
     # ponytail: split by featuring keywords, commas, and semicolons to get the primary artist
     primary = re.split(r'\b(?:feat\.?|featuring)\b|[;,]\s*', target_artist, flags=re.IGNORECASE)[0].strip()
     
@@ -453,12 +440,11 @@ def is_track_match(target_track, video_title):
         return True
     
     # Strip common youtube suffixes from video_title before comparing
-    import re
     stop_words = {'official', 'audio', 'video', 'lyrics', 'lyric', 'mv', 'hd', 'hq'}
     title_words = re.findall(r'\b\w+\b', video_title.lower())
     clean_title_words = [w for w in title_words if w not in stop_words]
-            
-    norm_target = normalize_text(target_track)
+
+    norm_target = "".join(c for c in unicodedata.normalize('NFKD', target_track) if c.isalnum()).lower()
     norm_title_clean = "".join(clean_title_words)
     
     if not norm_target or not norm_title_clean:
@@ -532,47 +518,59 @@ def is_release_date_match(spotify_release_date, yt_upload_date, yt_title="", tol
         return True, is_remaster
     return False, is_remaster
 
-def search_and_scrape(download_list, base_url, is_single_query=False):
+def resolve_item(item_dict, idx, total, downloads_dir, persistent_cache, dir_cache, cache_lock, is_single_query):
     """
-    Searches YouTube and downloads audio as 192kbps MP3.
-    Supports playlist folders and duplicate checking.
-    Strictly verifies artist matches in batch mode.
+    Producer-side: resolve a YouTube entry for one item WITHOUT downloading.
+    Searches, verifies (artist/track/duration), retries by release year on
+    mismatch, and applies metadata overrides. Cache-skip check is read-mostly
+    under cache_lock. Returns a dict describing the outcome; the consumer
+    performs the actual download.
     """
-    results = {}
-    total_items = len(download_list)
-    downloads_dir = os.path.join(os.getcwd(), 'downloads')
-    os.makedirs(downloads_dir, exist_ok=True)
-    
-    persistent_cache = load_cache()
-    dir_cache = build_dir_cache(downloads_dir)
-    
-    for idx, item_dict in enumerate(download_list, 1):
-        item = item_dict["query"]
-        playlist_name = item_dict["playlist"]
-        target_artist = item_dict.get("artist", "")
-        
-        print(f"\n{'='*70}")
-        print(f"Processing [{idx}/{total_items}]")
-        print(f"{'='*70}")
-        print(f"🔍 Searching for: {item}")
-        
-        # Log to structured audit log
-        logger.info("Processing scrape item", extra={"query": item, "index": idx, "total": total_items})
-        
-        # Determine specific folder for download
-        if playlist_name:
-            # Clean playlist name for filesystem compatibility
-            safe_playlist = "".join(c for c in playlist_name if c.isalnum() or c in (' ', '_', '-')).strip()
-            track_download_dir = os.path.join(downloads_dir, safe_playlist)
-        else:
-            track_download_dir = downloads_dir
-            
-        os.makedirs(track_download_dir, exist_ok=True)
-        
-        start_time = time.time()
-        search_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # --- Check if already downloaded ---
+    item = item_dict["query"]
+    playlist_name = item_dict["playlist"]
+    target_artist = item_dict.get("artist", "")
+
+    print(f"\n{'='*70}")
+    print(f"Searching [{idx}/{total}]")
+    print(f"{'='*70}")
+    print(f"🔍 Searching for: {item}")
+
+    logger.info("Processing scrape item", extra={"query": item, "index": idx, "total": total})
+
+    if playlist_name:
+        safe_playlist = "".join(c for c in playlist_name if c.isalnum() or c in (' ', '_', '-')).strip()
+        track_download_dir = os.path.join(downloads_dir, safe_playlist)
+    else:
+        track_download_dir = downloads_dir
+    os.makedirs(track_download_dir, exist_ok=True)
+
+    search_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    ffmpeg_dir = r"C:\Users\ADMIN\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
+    ydl_opts = {
+        'ffmpeg_location': ffmpeg_dir if os.path.exists(ffmpeg_dir) else None,
+        'format': 'm4a/bestaudio/best',
+        'outtmpl': os.path.join(track_download_dir, '%(title)s.%(ext)s'),
+        'writethumbnail': True,
+        'postprocessors': [
+            {'key': 'FFmpegMetadata', 'add_metadata': True},
+            {'key': 'EmbedThumbnail'},
+        ],
+        'quiet': True,
+        'no_warnings': True,
+    }
+
+    base = {
+        "item": item,
+        "item_dict": item_dict,
+        "playlist_name": playlist_name,
+        "track_download_dir": track_download_dir,
+        "search_time_str": search_time_str,
+        "ydl_opts": ydl_opts,
+    }
+
+    # --- Cache-skip check (under lock; writes only populate cache for next run) ---
+    with cache_lock:
         existing_file = None
         if item in persistent_cache:
             cache_entry = persistent_cache[item]
@@ -580,11 +578,9 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
                 cached_path = cache_entry
             else:
                 cached_path = cache_entry.get("file_path", "")
-            
             if os.path.exists(cached_path):
                 existing_file = cached_path
 
-        # ID-based fallback cache lookup
         if not existing_file and item_dict.get("id"):
             target_id = item_dict["id"]
             for cached_item, cache_entry in persistent_cache.items():
@@ -607,371 +603,425 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
                     "youtube_artist": item_dict.get("artist", "Unknown (Local Cache)")
                 }
                 save_cache(persistent_cache)
-                
-        if existing_file:
-            relative_path = os.path.relpath(existing_file, downloads_dir)
-            print(f"  ✓ Already downloaded: {item} (found at downloads/{relative_path})")
-            print(f"    Skipping download.")
-            results[item] = {
-                'title': item_dict.get("track", os.path.splitext(os.path.basename(existing_file))[0]),
-                'artist': item_dict.get("artist", "Local Cache"),
-                'album': item_dict.get("album", playlist_name if playlist_name else 'Already Downloaded'),
-                'duration': item_dict.get("duration", "-"),
-                'type': 'track',
-                'url': 'local',
-                'status': 'downloaded',
-                'search_time': search_time_str,
-                'download_time': '0.0s',
-                'download_completed': search_time_str
-            }
-            emit_log('downloadLinks', item, results[item])
-            continue
-            
-        ffmpeg_dir = r"C:\Users\ADMIN\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
-        ydl_opts = {
-            'ffmpeg_location': ffmpeg_dir if os.path.exists(ffmpeg_dir) else None,
-            'format': 'm4a/bestaudio/best',
-            'outtmpl': os.path.join(track_download_dir, '%(title)s.%(ext)s'),
-            'writethumbnail': True,
-            'postprocessors': [
-                {
-                    'key': 'FFmpegMetadata',
-                    'add_metadata': True,
-                },
-                {
-                    'key': 'EmbedThumbnail',
-                }
-            ],
-            'quiet': True,
-            'no_warnings': True,
-        }
-        
-        # In batch mode, we pull up to 5 results to ensure we find a matching artist
-        if is_single_query:
-            query = f"ytsearch1:{item}"
-        else:
-            query = f"ytsearch5:{item} Official Audio"
-        
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(query, download=False)
-                
-                selected_entry = None
-                if 'entries' in info and len(info['entries']) > 0:
-                    entries = info['entries']
-                    if is_single_query:
-                        # User prompted query: bypass verification, take first result
-                        selected_entry = entries[0]
-                    else:
-                        # Batch mode: find first matching entry
-                        for entry in entries:
-                            if not entry:
+
+    if existing_file:
+        base.update({"status": "skip_cached", "existing_file": existing_file})
+        return base
+
+    # --- YouTube search + match (no download) ---
+    if is_single_query:
+        query = f"ytsearch1:{item}"
+    else:
+        query = f"ytsearch5:{item} Official Audio"
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(query, download=False)
+
+            selected_entry = None
+            if 'entries' in info and len(info['entries']) > 0:
+                entries = info['entries']
+                if is_single_query:
+                    # User prompted query: bypass verification, take first result
+                    selected_entry = entries[0]
+                else:
+                    # Batch mode: find first matching entry
+                    for entry in entries:
+                        if not entry:
+                            continue
+                        title = entry.get('title', '')
+                        uploader = entry.get('uploader', '')
+                        channel = entry.get('channel', '')
+                        duration = entry.get('duration', 0)
+                        expected_duration = item_dict.get("duration", "-")
+                        target_track = item_dict.get("track", "")
+
+                        if not is_artist_match(target_artist, title, uploader, channel):
+                            print(f"    [Skipping] Artist mismatch for '{title}' (Channel: {channel})")
+                            continue
+
+                        if not is_track_match(target_track, title):
+                            print(f"    [Skipping] Track title mismatch for '{title}' (Expected: {target_track})")
+                            continue
+
+                        if not is_duration_match(expected_duration, duration):
+                            print(f"    [Skipping] Duration mismatch for '{title}' ({duration}s vs expected {expected_duration})")
+                            continue
+
+                        selected_entry = entry
+                        break
+
+            if selected_entry:
+                base.update(_finalize_match(selected_entry, item_dict, playlist_name, search_time_str, via_fallback=False))
+                return base
+
+            # No match
+            if is_single_query:
+                print(f"  ✗ No results found for: {item}")
+                base.update({"status": "not_found"})
+                return base
+
+            print(f"  ✗ Skipped: Artist mismatch. checked up to 5 results for: {item} (target artist: '{target_artist}')")
+
+            # --- Fallback: retry with release year ---
+            release_date = item_dict.get("release_date", "")
+            fallback_entry = None
+            if release_date and len(release_date) >= 4:
+                release_year = release_date[:4]
+                fallback_query = f"ytsearch5:{item} {release_year}"
+                print(f"  🔄 [Fallback] Retrying with release year: {release_year}")
+                try:
+                    fallback_info = ydl.extract_info(fallback_query, download=False)
+                    if 'entries' in fallback_info and len(fallback_info['entries']) > 0:
+                        for fb_entry in fallback_info['entries']:
+                            if not fb_entry:
                                 continue
-                            title = entry.get('title', '')
-                            uploader = entry.get('uploader', '')
-                            channel = entry.get('channel', '')
-                            duration = entry.get('duration', 0)
+                            fb_title = fb_entry.get('title', '')
+                            fb_duration = fb_entry.get('duration', 0)
+                            fb_upload_date = fb_entry.get('upload_date', '')
                             expected_duration = item_dict.get("duration", "-")
                             target_track = item_dict.get("track", "")
-                            
-                            if not is_artist_match(target_artist, title, uploader, channel):
-                                print(f"    [Skipping] Artist mismatch for '{title}' (Channel: {channel})")
+
+                            if not is_track_match(target_track, fb_title):
+                                print(f"    [Fallback Skip] Track mismatch for '{fb_title}' (Expected: {target_track})")
                                 continue
-                                
-                            if not is_track_match(target_track, title):
-                                print(f"    [Skipping] Track title mismatch for '{title}' (Expected: {target_track})")
+
+                            date_matches, is_remaster = is_release_date_match(release_date, fb_upload_date, fb_title)
+                            if not date_matches:
+                                print(f"    [Fallback Skip] Release date mismatch for '{fb_title}' (upload: {fb_upload_date}, expected: ~{release_year})")
                                 continue
-                                
-                            if not is_duration_match(expected_duration, duration):
-                                print(f"    [Skipping] Duration mismatch for '{title}' ({duration}s vs expected {expected_duration})")
+
+                            if not is_duration_match(expected_duration, fb_duration):
+                                print(f"    [Fallback Skip] Duration mismatch for '{fb_title}' ({fb_duration}s vs expected {expected_duration})")
                                 continue
-                                
-                            selected_entry = entry
+
+                            remaster_tag = " [Remaster]" if is_remaster else ""
+                            print(f"  ✓ [Fallback] Found match: {fb_title}{remaster_tag}")
+                            fallback_entry = fb_entry
                             break
-                
-                if selected_entry:
-                    title = selected_entry.get('title', 'Unknown Title')
-                    uploader = selected_entry.get('uploader', 'Unknown Artist')
-                    duration = selected_entry.get('duration', 0)
-                    webpage_url = selected_entry.get('webpage_url', '')
-                    if not webpage_url:
-                        webpage_url = f"https://www.youtube.com/watch?v={selected_entry.get('id')}"
-                    
-                    # Format duration
-                    mins, secs = divmod(int(duration), 60)
-                    duration_str = f"{mins}m {secs}s"
-                    
-                    print(f"  ✓ Found Match: {title}")
-                    print(f"    Artist: {uploader}")
-                    if playlist_name:
-                        print(f"    Playlist: {playlist_name}")
-                    print(f"    Album: YouTube Video")
-                    print(f"    Duration: {duration_str}")
-                    print(f"    Type: Track")
-                    print(f"    🔗 Link: {webpage_url}")
-                    print(f"    ⏱️ Search completed at: {search_time_str}")
-                    
-                    print(f"\n    ⬇️ Starting download (with metadata & cover art)...\n")
-                    
-                    # Override metadata fields with Spotify details for embedding
-                    selected_entry['title'] = item_dict.get('track') or title
-                    selected_entry['artist'] = item_dict.get('artist') or uploader
-                    selected_entry['album'] = playlist_name if playlist_name else 'SpotScraper Downloads'
-                    selected_entry['track'] = item_dict.get('track') or title
-                    selected_entry['uploader'] = item_dict.get('artist') or uploader
-                    if item_dict.get('id'):
-                        selected_entry['comment'] = f"Spotify URI: {item_dict['id']}"
-                    
-                    # Process download and embed metadata/artwork
-                    ydl.process_info(selected_entry)
-                    
-                    # Update cache with new file
-                    new_file = None
-                    try:
-                        prepared_filename = ydl.prepare_filename(selected_entry)
-                        if os.path.exists(prepared_filename):
-                            new_file = prepared_filename
-                    except Exception as prep_err:
-                        print(f"    (Warning preparing filename: {prep_err})")
-                    
-                    # Fallback scan: match downloaded file by YouTube title first, then check_already_downloaded
-                    clean_yt_title = "".join(c for c in title if c.isalnum()).lower()
-                    for file in os.listdir(track_download_dir):
-                        if file.endswith(('.mp3', '.m4a')):
-                            filepath = os.path.join(track_download_dir, file)
-                            filename_no_ext = os.path.splitext(file)[0]
-                            clean_filename = "".join(c for c in filename_no_ext if c.isalnum()).lower()
-                            dir_cache[clean_filename] = filepath
-                            if not new_file and (clean_yt_title in clean_filename or clean_filename in clean_yt_title):
-                                new_file = filepath
-                            
-                    if not new_file:
-                        new_file = check_already_downloaded(item, dir_cache, item_dict)
-                    
-                    if new_file:
-                        persistent_cache[item] = {
-                            "id": item_dict.get("id", ""),
-                            "query": item,
-                            "file_path": new_file,
-                            "youtube_title": title,
-                            "youtube_artist": uploader
-                        }
-                        save_cache(persistent_cache)
-                    
-                    end_time = time.time()
-                    actual_duration = end_time - start_time
-                    download_completed_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    print(f"    ✅ Download complete in {actual_duration:.1f}s")
-                    print(f"    Completed at: {download_completed_str}\n")
-                    logger.info("Download complete", extra={"query": item, "url": webpage_url, "duration": actual_duration})
-                    results[item] = {
-                        'title': title,
-                        'artist': uploader,
-                        'album': playlist_name if playlist_name else 'YouTube Video',
-                        'duration': duration_str,
-                        'type': 'track',
-                        'url': webpage_url,
-                        'status': 'downloaded',
-                        'search_time': search_time_str,
-                        'download_time': f"{actual_duration:.1f}s",
-                        'download_completed': download_completed_str
+                except Exception as fb_err:
+                    print(f"    [Fallback Error] {str(fb_err)}")
+
+            if fallback_entry:
+                base.update(_finalize_match(fallback_entry, item_dict, playlist_name, search_time_str, via_fallback=True))
+                return base
+
+            base.update({
+                "status": "skipped_mismatch",
+                "error": f"Artist mismatch (target: {target_artist})",
+            })
+            return base
+
+    except Exception as e:
+        err_msg = str(e).lower()
+        if "confirm your age" in err_msg or "age restricted" in err_msg or "sign in" in err_msg:
+            base.update({"status": "sc_fallback", "error": str(e)})
+            return base
+        print(f"  ✗ Error resolving: {item} - {str(e)}")
+        logger.error("Resolve failed", extra={"query": item, "error": str(e)})
+        time.sleep(2)
+        base.update({"status": "error", "error": str(e)})
+        return base
+
+
+def _finalize_match(entry, item_dict, playlist_name, search_time_str, via_fallback):
+    """Capture match metadata, print result, apply Spotify metadata overrides on entry."""
+    title = entry.get('title', 'Unknown Title')
+    uploader = entry.get('uploader', 'Unknown Artist')
+    duration = entry.get('duration', 0)
+    webpage_url = entry.get('webpage_url', '')
+    if not webpage_url:
+        webpage_url = f"https://www.youtube.com/watch?v={entry.get('id')}"
+
+    mins, secs = divmod(int(duration), 60)
+    duration_str = f"{mins}m {secs}s"
+
+    if via_fallback:
+        print(f"    Artist: {uploader}")
+        if playlist_name:
+            print(f"    Playlist: {playlist_name}")
+        print(f"    Duration: {duration_str}")
+        print(f"    🔗 Link: {webpage_url}")
+    else:
+        print(f"  ✓ Found Match: {title}")
+        print(f"    Artist: {uploader}")
+        if playlist_name:
+            print(f"    Playlist: {playlist_name}")
+        print(f"    Album: YouTube Video")
+        print(f"    Duration: {duration_str}")
+        print(f"    Type: Track")
+        print(f"    🔗 Link: {webpage_url}")
+        print(f"    ⏱️ Search completed at: {search_time_str}")
+    print(f"\n    ⬇️ Starting download (with metadata & cover art)...\n")
+
+    # Override metadata fields with Spotify details for embedding
+    entry['title'] = item_dict.get('track') or title
+    entry['artist'] = item_dict.get('artist') or uploader
+    entry['album'] = playlist_name if playlist_name else 'SpotScraper Downloads'
+    entry['track'] = item_dict.get('track') or title
+    entry['uploader'] = item_dict.get('artist') or uploader
+    if item_dict.get('id'):
+        entry['comment'] = f"Spotify URI: {item_dict['id']}"
+
+    return {
+        "status": "matched",
+        "entry": entry,
+        "title": title,
+        "uploader": uploader,
+        "duration_str": duration_str,
+        "webpage_url": webpage_url,
+        "via_fallback": via_fallback,
+    }
+
+
+def _soundcloud_fallback(item, playlist_name, search_time_str, ydl_opts, results):
+    """SoundCloud fallback for age-restricted YouTube items. Returns True on success."""
+    print(f"  [!] YouTube age restriction encountered. Bypassing by falling back to SoundCloud...")
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl_sc:
+            sc_info = ydl_sc.extract_info(f"scsearch1:{item}", download=True)
+            if 'entries' in sc_info and len(sc_info['entries']) > 0:
+                sc_entry = sc_info['entries'][0]
+                sc_title = sc_entry.get('title', item)
+                sc_uploader = sc_entry.get('uploader', 'SoundCloud Artist')
+                print(f"  ✓ [SoundCloud] Successfully downloaded: {sc_title}")
+                results[item] = {
+                    'title': sc_title,
+                    'artist': sc_uploader,
+                    'album': playlist_name if playlist_name else 'SoundCloud Audio',
+                    'duration': '-',
+                    'type': 'track',
+                    'url': sc_entry.get('webpage_url', 'local'),
+                    'status': 'downloaded',
+                    'search_time': search_time_str,
+                    'download_time': 'Fallback',
+                    'download_completed': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                }
+                emit_log('downloadLinks', item, results[item])
+                return True
+    except Exception as sc_err:
+        print(f"  ✗ SoundCloud fallback also failed: {str(sc_err)}")
+    return False
+
+
+def download_resolved(resolved, downloads_dir, persistent_cache, dir_cache, cache_lock, results):
+    """Consumer-side: download (or record) one resolved item and emit its log."""
+    status = resolved["status"]
+    item = resolved["item"]
+    item_dict = resolved["item_dict"]
+    playlist_name = resolved["playlist_name"]
+    search_time_str = resolved["search_time_str"]
+
+    if status == "skip_cached":
+        existing_file = resolved["existing_file"]
+        relative_path = os.path.relpath(existing_file, downloads_dir)
+        print(f"  ✓ Already downloaded: {item} (found at downloads/{relative_path})")
+        print(f"    Skipping download.")
+        results[item] = {
+            'title': item_dict.get("track", os.path.splitext(os.path.basename(existing_file))[0]),
+            'artist': item_dict.get("artist", "Local Cache"),
+            'album': item_dict.get("album", playlist_name if playlist_name else 'Already Downloaded'),
+            'duration': item_dict.get("duration", "-"),
+            'type': 'track',
+            'url': 'local',
+            'status': 'downloaded',
+            'search_time': search_time_str,
+            'download_time': '0.0s',
+            'download_completed': search_time_str,
+        }
+        emit_log('downloadLinks', item, results[item])
+        return
+
+    if status == "not_found":
+        print(f"  ✗ No results found for: {item}")
+        results[item] = {'title': item, 'status': 'not_found', 'search_time': search_time_str}
+        emit_log('downloadLinks', item, results[item])
+        return
+
+    if status == "skipped_mismatch":
+        results[item] = {
+            'title': item,
+            'status': 'skipped_mismatch',
+            'search_time': search_time_str,
+            'error': resolved.get("error", f"Artist mismatch (target: {item_dict.get('artist', '')})"),
+        }
+        emit_log('downloadLinks', item, results[item])
+        return
+
+    if status == "error":
+        print(f"  ✗ Error resolving: {item} - {resolved.get('error', '')}")
+        logger.error("Resolve failed", extra={"query": item, "error": resolved.get('error', '')})
+        results[item] = {
+            'title': item,
+            'status': 'error',
+            'error': resolved.get('error', 'unknown'),
+            'search_time': search_time_str,
+        }
+        emit_log('downloadLinks', item, results[item])
+        return
+
+    if status == "sc_fallback":
+        if _soundcloud_fallback(item, playlist_name, search_time_str, resolved["ydl_opts"], results):
+            return
+        results[item] = {
+            'title': item,
+            'status': 'error',
+            'error': resolved.get('error', 'YouTube age restriction; SoundCloud fallback failed'),
+            'search_time': search_time_str,
+        }
+        emit_log('downloadLinks', item, results[item])
+        return
+
+    # status == "matched"
+    entry = resolved["entry"]
+    ydl_opts = resolved["ydl_opts"]
+    title = resolved["title"]
+    uploader = resolved["uploader"]
+    duration_str = resolved["duration_str"]
+    webpage_url = resolved["webpage_url"]
+    via_fallback = resolved.get("via_fallback", False)
+    track_download_dir = resolved["track_download_dir"]
+    start_time = time.time()
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.process_info(entry)
+
+            new_file = None
+            try:
+                prepared_filename = ydl.prepare_filename(entry)
+                if os.path.exists(prepared_filename):
+                    new_file = prepared_filename
+            except Exception as prep_err:
+                print(f"    (Warning preparing filename: {prep_err})")
+
+            clean_yt_title = "".join(c for c in title if c.isalnum()).lower()
+            with cache_lock:
+                for file in os.listdir(track_download_dir):
+                    if file.endswith(('.mp3', '.m4a')):
+                        filepath = os.path.join(track_download_dir, file)
+                        filename_no_ext = os.path.splitext(file)[0]
+                        clean_filename = "".join(c for c in filename_no_ext if c.isalnum()).lower()
+                        dir_cache[clean_filename] = filepath
+                        if not new_file and (clean_yt_title in clean_filename or clean_filename in clean_yt_title):
+                            new_file = filepath
+
+                if not new_file:
+                    new_file = check_already_downloaded(item, dir_cache, item_dict)
+
+                if new_file:
+                    persistent_cache[item] = {
+                        "id": item_dict.get("id", ""),
+                        "query": item,
+                        "file_path": new_file,
+                        "youtube_title": title,
+                        "youtube_artist": uploader,
                     }
-                    emit_log('downloadLinks', item, results[item])
-                else:
-                    if is_single_query:
-                        print(f"  ✗ No results found for: {item}")
-                        results[item] = {
-                            'title': item,
-                            'status': 'not_found',
-                            'search_time': search_time_str
-                        }
-                        emit_log('downloadLinks', item, results[item])
-                    else:
-                        print(f"  ✗ Skipped: Artist mismatch. checked up to 5 results for: {item} (target artist: '{target_artist}')")
-                        
-                        # --- FALLBACK: Retry with release year for more accurate results ---
-                        release_date = item_dict.get("release_date", "")
-                        fallback_entry = None
-                        
-                        if release_date and len(release_date) >= 4:
-                            release_year = release_date[:4]
-                            fallback_query = f"ytsearch5:{item} {release_year}"
-                            print(f"  🔄 [Fallback] Retrying with release year: {release_year}")
-                            
-                            try:
-                                fallback_info = ydl.extract_info(fallback_query, download=False)
-                                if 'entries' in fallback_info and len(fallback_info['entries']) > 0:
-                                    for fb_entry in fallback_info['entries']:
-                                        if not fb_entry:
-                                            continue
-                                        fb_title = fb_entry.get('title', '')
-                                        fb_duration = fb_entry.get('duration', 0)
-                                        fb_upload_date = fb_entry.get('upload_date', '')
-                                        expected_duration = item_dict.get("duration", "-")
-                                        target_track = item_dict.get("track", "")
-                                        
-                                        # Check track title match (required)
-                                        if not is_track_match(target_track, fb_title):
-                                            print(f"    [Fallback Skip] Track mismatch for '{fb_title}' (Expected: {target_track})")
-                                            continue
-                                        
-                                        # Check release date proximity (required when available)
-                                        date_matches, is_remaster = is_release_date_match(release_date, fb_upload_date, fb_title)
-                                        if not date_matches:
-                                            print(f"    [Fallback Skip] Release date mismatch for '{fb_title}' (upload: {fb_upload_date}, expected: ~{release_year})")
-                                            continue
-                                        
-                                        # Check duration match (required when available)
-                                        if not is_duration_match(expected_duration, fb_duration):
-                                            print(f"    [Fallback Skip] Duration mismatch for '{fb_title}' ({fb_duration}s vs expected {expected_duration})")
-                                            continue
-                                        
-                                        remaster_tag = " [Remaster]" if is_remaster else ""
-                                        print(f"  ✓ [Fallback] Found match: {fb_title}{remaster_tag}")
-                                        fallback_entry = fb_entry
-                                        break
-                            except Exception as fb_err:
-                                print(f"    [Fallback Error] {str(fb_err)}")
-                        
-                        if fallback_entry:
-                            # Process the fallback match (same download flow as normal match)
-                            title = fallback_entry.get('title', 'Unknown Title')
-                            uploader = fallback_entry.get('uploader', 'Unknown Artist')
-                            duration = fallback_entry.get('duration', 0)
-                            webpage_url = fallback_entry.get('webpage_url', '')
-                            if not webpage_url:
-                                webpage_url = f"https://www.youtube.com/watch?v={fallback_entry.get('id')}"
-                            
-                            mins, secs = divmod(int(duration), 60)
-                            duration_str = f"{mins}m {secs}s"
-                            
-                            print(f"    Artist: {uploader}")
-                            if playlist_name:
-                                print(f"    Playlist: {playlist_name}")
-                            print(f"    Duration: {duration_str}")
-                            print(f"    🔗 Link: {webpage_url}")
-                            print(f"\n    ⬇️ Starting download (with metadata & cover art)...\n")
-                            
-                            # Override metadata fields with Spotify details
-                            fallback_entry['title'] = item_dict.get('track') or title
-                            fallback_entry['artist'] = item_dict.get('artist') or uploader
-                            fallback_entry['album'] = playlist_name if playlist_name else 'SpotScraper Downloads'
-                            fallback_entry['track'] = item_dict.get('track') or title
-                            fallback_entry['uploader'] = item_dict.get('artist') or uploader
-                            if item_dict.get('id'):
-                                fallback_entry['comment'] = f"Spotify URI: {item_dict['id']}"
-                            
-                            ydl.process_info(fallback_entry)
-                            
-                            # Update cache with new file
-                            new_file = None
-                            try:
-                                prepared_filename = ydl.prepare_filename(fallback_entry)
-                                if os.path.exists(prepared_filename):
-                                    new_file = prepared_filename
-                            except Exception as prep_err:
-                                print(f"    (Warning preparing filename: {prep_err})")
-                            
-                            clean_yt_title = "".join(c for c in title if c.isalnum()).lower()
-                            for file in os.listdir(track_download_dir):
-                                if file.endswith(('.mp3', '.m4a')):
-                                    filepath = os.path.join(track_download_dir, file)
-                                    filename_no_ext = os.path.splitext(file)[0]
-                                    clean_filename = "".join(c for c in filename_no_ext if c.isalnum()).lower()
-                                    dir_cache[clean_filename] = filepath
-                                    if not new_file and (clean_yt_title in clean_filename or clean_filename in clean_yt_title):
-                                        new_file = filepath
-                            
-                            if not new_file:
-                                new_file = check_already_downloaded(item, dir_cache, item_dict)
-                            
-                            if new_file:
-                                persistent_cache[item] = {
-                                    "id": item_dict.get("id", ""),
-                                    "query": item,
-                                    "file_path": new_file,
-                                    "youtube_title": title,
-                                    "youtube_artist": uploader
-                                }
-                                save_cache(persistent_cache)
-                            
-                            end_time = time.time()
-                            actual_duration = end_time - start_time
-                            download_completed_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            
-                            print(f"    ✅ Download complete in {actual_duration:.1f}s (via release-date fallback)")
-                            print(f"    Completed at: {download_completed_str}\n")
-                            logger.info("Download complete (fallback)", extra={"query": item, "url": webpage_url, "duration": actual_duration, "fallback": True})
-                            results[item] = {
-                                'title': title,
-                                'artist': uploader,
-                                'album': playlist_name if playlist_name else 'YouTube Video',
-                                'duration': duration_str,
-                                'type': 'track',
-                                'url': webpage_url,
-                                'status': 'downloaded',
-                                'search_time': search_time_str,
-                                'download_time': f"{actual_duration:.1f}s",
-                                'download_completed': download_completed_str
-                            }
-                            emit_log('downloadLinks', item, results[item])
-                        else:
-                            # Fallback also failed or no release date available
-                            results[item] = {
-                                'title': item,
-                                'status': 'skipped_mismatch',
-                                'search_time': search_time_str,
-                                'error': f"Artist mismatch (target: {target_artist})"
-                            }
-                            emit_log('downloadLinks', item, results[item])
-                        
-        except Exception as e:
-            err_msg = str(e).lower()
-            if "confirm your age" in err_msg or "age restricted" in err_msg or "sign in" in err_msg:
-                print(f"  [!] YouTube age restriction encountered. Bypassing by falling back to SoundCloud...")
-                try:
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl_sc:
-                        sc_info = ydl_sc.extract_info(f"scsearch1:{item}", download=True)
-                        if 'entries' in sc_info and len(sc_info['entries']) > 0:
-                            sc_entry = sc_info['entries'][0]
-                            sc_title = sc_entry.get('title', item)
-                            sc_uploader = sc_entry.get('uploader', 'SoundCloud Artist')
-                            print(f"  ✓ [SoundCloud] Successfully downloaded: {sc_title}")
-                            
-                            results[item] = {
-                                'title': sc_title,
-                                'artist': sc_uploader,
-                                'album': playlist_name if playlist_name else 'SoundCloud Audio',
-                                'duration': '-',
-                                'type': 'track',
-                                'url': sc_entry.get('webpage_url', 'local'),
-                                'status': 'downloaded',
-                                'search_time': search_time_str,
-                                'download_time': 'Fallback',
-                                'download_completed': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            }
-                            emit_log('downloadLinks', item, results[item])
-                            continue
-                except Exception as sc_err:
-                    print(f"  ✗ SoundCloud fallback also failed: {str(sc_err)}")
-                    
-            print(f"  ✗ Error searching/downloading: {item} - {str(e)}")
-            logger.error("Download failed", extra={"query": item, "error": str(e)})
-            time.sleep(2)
+                    save_cache(persistent_cache)
+
+            end_time = time.time()
+            actual_duration = end_time - start_time
+            download_completed_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            tag = " (via release-date fallback)" if via_fallback else ""
+            print(f"    ✅ Download complete in {actual_duration:.1f}s{tag}")
+            print(f"    Completed at: {download_completed_str}\n")
+            log_msg = "Download complete (fallback)" if via_fallback else "Download complete"
+            log_extra = {"query": item, "url": webpage_url, "duration": actual_duration}
+            if via_fallback:
+                log_extra["fallback"] = True
+            logger.info(log_msg, extra=log_extra)
             results[item] = {
-                'title': item,
-                'status': 'error',
-                'error': str(e),
-                'search_time': search_time_str
+                'title': title,
+                'artist': uploader,
+                'album': playlist_name if playlist_name else 'YouTube Video',
+                'duration': duration_str,
+                'type': 'track',
+                'url': webpage_url,
+                'status': 'downloaded',
+                'search_time': search_time_str,
+                'download_time': f"{actual_duration:.1f}s",
+                'download_completed': download_completed_str,
             }
             emit_log('downloadLinks', item, results[item])
-            
+    except Exception as e:
+        err_msg = str(e).lower()
+        if "confirm your age" in err_msg or "age restricted" in err_msg or "sign in" in err_msg:
+            if _soundcloud_fallback(item, playlist_name, search_time_str, ydl_opts, results):
+                return
+        print(f"  ✗ Error downloading: {item} - {str(e)}")
+        logger.error("Download failed", extra={"query": item, "error": str(e)})
+        time.sleep(2)
+        results[item] = {
+            'title': item,
+            'status': 'error',
+            'error': str(e),
+            'search_time': search_time_str,
+        }
+        emit_log('downloadLinks', item, results[item])
+
+
+def search_and_scrape(download_list, base_url, is_single_query=False):
+    """
+    Searches YouTube and downloads audio as 192kbps MP3.
+    Supports playlist folders and duplicate checking.
+    Strictly verifies artist matches in batch mode.
+
+    Pipeline: a background producer thread resolves the next up to 5 YouTube
+    links (search + match) while the main thread downloads the current one, so
+    search latency is hidden behind download time. `base_url` is accepted for
+    CLI compatibility but YouTube/SoundCloud are searched directly.
+    """
+    results = {}
+    total_items = len(download_list)
+    downloads_dir = os.path.join(os.getcwd(), 'downloads')
+    os.makedirs(downloads_dir, exist_ok=True)
+
+    persistent_cache = load_cache()
+    dir_cache = build_dir_cache(downloads_dir)
+    cache_lock = threading.Lock()
+    work_queue = queue.Queue(maxsize=5)
+
+    def producer():
+        try:
+            for idx, item_dict in enumerate(download_list, 1):
+                work_queue.put(resolve_item(
+                    item_dict, idx, total_items,
+                    downloads_dir, persistent_cache, dir_cache, cache_lock,
+                    is_single_query,
+                ))
+        except Exception as e:
+            logger.error("Producer thread crashed", extra={"error": str(e)})
+        finally:
+            work_queue.put(None)
+
+    producer_thread = threading.Thread(target=producer, daemon=True)
+    producer_thread.start()
+
+    dl_idx = 0
+    while True:
+        resolved = work_queue.get()
+        if resolved is None:
+            break
+        dl_idx += 1
+        print(f"\n{'='*70}")
+        print(f"Downloading [{dl_idx}/{total_items}]")
+        print(f"{'='*70}")
+        download_resolved(resolved, downloads_dir, persistent_cache, dir_cache, cache_lock, results)
+
+    producer_thread.join()
     return results
 
+
 if __name__ == "__main__":
-    import sys
-    
+    if "--selfcheck" in sys.argv:
+        assert is_artist_match("Daft Punk", "Around the World - Daft Punk (Official)", "Daft Punk", None)
+        assert is_artist_match("The Weeknd", "Blinding Lights (The Weeknd)", "TheWeeknd VEVO", None)
+        assert not is_artist_match("Drake", "Hotline Bling by Taylor Swift", "TaylorSwift", None)
+        assert is_track_match("Blinding Lights", "Blinding Lights (Official Audio) - The Weeknd")
+        assert not is_track_match("Shape of You", "Hotline Bling - Drake Official")
+        print("Self-check passed.")
+        sys.exit(0)
+
     # 1. Define the folder containing your Spotify History JSONs / CSVs
     json_folder = 'spotify_data' if os.path.exists('spotify_data') else 'json_directory'
     
