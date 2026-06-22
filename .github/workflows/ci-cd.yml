@@ -8,7 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository_owner }}/spotscraper
 
 jobs:
   # ─────────────────────────────────────────────
@@ -116,6 +115,9 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set lowercase Image Prefix
+        run: echo "IMAGE_PREFIX=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')/spotscraper" >> $GITHUB_ENV
 
       - name: Generate image tags
         id: meta

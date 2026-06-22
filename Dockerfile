@@ -14,7 +14,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy scraper source code
 COPY Scraper.py .
-COPY qobuz_scrapper.py .
 COPY spotify_recap.py .
 
 # Create runtime directories
