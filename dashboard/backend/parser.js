@@ -231,11 +231,10 @@ async function aggregateStats() {
       { period: 'Night', hours: msToHours(stats.byTimeOfDay.night), fill: 'var(--chart-4)' },
     ];
 
-    // Daily trend (last 90 days, sorted)
+    // Daily trend (all time, sorted)
     const sortedDays = Object.entries(stats.dailyMs)
       .map(([date, ms]) => ({ date, hours: msToHours(ms) }))
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-90);
+      .sort((a, b) => a.date.localeCompare(b.date));
 
     // Listening streak
     const allDays = Object.keys(stats.dailyMs).sort();

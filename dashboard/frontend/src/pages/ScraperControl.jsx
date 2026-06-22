@@ -205,11 +205,11 @@ export default function ScraperControl() {
               <div className="space-y-3">
                 <label className="text-sm font-medium">Download Quality</label>
                 <ToggleGroup type="single" value={scraperType} onValueChange={(val) => val && setScraperType(val)} disabled={isRunning} className="justify-start">
-                  <ToggleGroupItem value="api" aria-label="Fast · 192kbps" className="flex-1 py-6 h-auto flex flex-col gap-1 items-start data-[state=on]:bg-primary/10 data-[state=on]:border-primary border">
+                  <ToggleGroupItem value="api" aria-label="Fast · 192kbps" className="flex-1 py-6 h-auto flex flex-col gap-1 items-start border border-white/10 rounded-lg bg-card/20 backdrop-blur-sm transition-all duration-300 data-[state=on]:bg-[oklch(0.488_0.243_264.376_/_0.15)] data-[state=on]:border-[oklch(0.488_0.243_264.376_/_0.5)] data-[state=on]:shadow-[0_0_20px_oklch(0.488_0.243_264.376_/_0.2)] data-[state=on]:scale-[1.02] data-[state=off]:opacity-50 data-[state=off]:hover:opacity-80 data-[state=off]:hover:bg-card/30">
                     <div className="flex items-center gap-2 font-semibold"><span className="text-lg">⚡</span> Fast · 192kbps</div>
                     <div className="text-xs text-muted-foreground font-normal">Quick track downloads</div>
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="selenium" aria-label="HQ · 320kbps" className="flex-1 py-6 h-auto flex flex-col gap-1 items-start data-[state=on]:bg-primary/10 data-[state=on]:border-primary border">
+                  <ToggleGroupItem value="selenium" aria-label="HQ · 320kbps" className="flex-1 py-6 h-auto flex flex-col gap-1 items-start border border-white/10 rounded-lg bg-card/20 backdrop-blur-sm transition-all duration-300 data-[state=on]:bg-[oklch(0.488_0.243_264.376_/_0.15)] data-[state=on]:border-[oklch(0.488_0.243_264.376_/_0.5)] data-[state=on]:shadow-[0_0_20px_oklch(0.488_0.243_264.376_/_0.2)] data-[state=on]:scale-[1.02] data-[state=off]:opacity-50 data-[state=off]:hover:opacity-80 data-[state=off]:hover:bg-card/30">
                     <div className="flex items-center gap-2 font-semibold"><span className="text-lg">◆</span> HQ · 320kbps</div>
                     <div className="text-xs text-muted-foreground font-normal">Album-quality audio</div>
                   </ToggleGroupItem>

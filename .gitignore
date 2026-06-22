@@ -40,6 +40,9 @@ downloads/
 # User data (personal Spotify exports)
 # =========================
 spotify_data/
+apple_music_data/
+csvs/
+Jsons/
 
 # =========================
 # Security scan outputs

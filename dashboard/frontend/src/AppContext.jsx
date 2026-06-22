@@ -13,6 +13,8 @@ export const useAppContext = () => {
 
 export const AppProvider = ({ children }) => {
   const [stats, setStats] = useState(null);
+  const [appleStats, setAppleStats] = useState(null);
+  const [platformView, setPlatformView] = useState('all'); // 'all' | 'spotify' | 'apple'
   const [downloads, setDownloads] = useState([]);
   const [logs, setLogs] = useState({ downloadLinks: {}, scrapeLog: {} });
   
@@ -54,6 +56,7 @@ export const AppProvider = ({ children }) => {
 
   // Loading states
   const [loadingStats, setLoadingStats] = useState(true);
+  const [loadingAppleStats, setLoadingAppleStats] = useState(true);
   const [loadingDownloads, setLoadingDownloads] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(true);
 
@@ -210,6 +213,19 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const fetchAppleStats = async () => {
+    setLoadingAppleStats(true);
+    try {
+      const res = await fetch(`${backendUrl}/api/apple/stats`);
+      const data = await res.json();
+      setAppleStats(data);
+    } catch (err) {
+      console.error('Error fetching Apple stats:', err);
+    } finally {
+      setLoadingAppleStats(false);
+    }
+  };
+
   const fetchStats = async () => {
     setLoadingStats(true);
     try {
@@ -292,6 +308,7 @@ export const AppProvider = ({ children }) => {
 
   useEffect(() => {
     fetchStats();
+    fetchAppleStats();
     fetchDownloads();
     fetchLogs();
     fetchSources();
@@ -317,6 +334,8 @@ export const AppProvider = ({ children }) => {
 
   const value = {
     stats, setStats, loadingStats, fetchStats,
+    appleStats, setAppleStats, loadingAppleStats, fetchAppleStats,
+    platformView, setPlatformView,
     downloads, setDownloads, loadingDownloads, fetchDownloads,
     logs, setLogs, loadingLogs, fetchLogs,
     scraperStatus, setScraperStatus, checkScraperStatus,

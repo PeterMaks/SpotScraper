@@ -10,6 +10,7 @@ fs.ensureDir = async (p) => fs.mkdir(p, { recursive: true });
 fs.remove = async (p) => fs.rm(p, { recursive: true, force: true });
 const { spawn } = require('child_process');
 const { aggregateStats } = require('./parser');
+const { aggregateAppleStats } = require('./apple_parser');
 const logger = require('./logger');
 const archiver = require('archiver');
 
@@ -224,6 +225,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Serving the downloads directory statically for direct access
 const downloadsDir = path.join(__dirname, '../../downloads');
+const appleMusicDataDir = path.join(__dirname, '../../apple_music_data/csvs');
 app.use('/api/downloads/file', express.static(downloadsDir));
 
 // Background process state
@@ -231,6 +233,54 @@ let currentProcess = null;
 let processLog = '';
 let processStatus = 'idle'; // 'idle', 'running', 'success', 'error'
 let processType = ''; // 'api' or 'selenium'
+
+// Get Apple Music stats
+app.get('/api/apple/stats', async (req, res) => {
+  try {
+    const stats = await aggregateAppleStats();
+    res.json(stats);
+  } catch (err) {
+    logger.error('Failed to aggregate Apple stats', { error: err.message, ip: req.ip });
+    res.status(500).json({ error: 'Failed to aggregate Apple stats' });
+  }
+});
+
+// List Apple Music source files
+app.get('/api/apple/sources', async (req, res) => {
+  try {
+    await fs.ensureDir(appleMusicDataDir);
+    const files = await fs.readdir(appleMusicDataDir);
+    const sources = files.filter(f => f.endsWith('.csv'));
+    res.json({ sources });
+  } catch (err) {
+    logger.error('Failed to read Apple sources', { error: err.message, ip: req.ip });
+    res.status(500).json({ error: 'Failed to read Apple sources' });
+  }
+});
+
+// Upload Apple Music data file
+app.post('/api/apple/upload', async (req, res) => {
+  try {
+    const { fileName, content } = req.body;
+    if (!fileName || !content) return res.status(400).json({ error: 'Missing fileName or content.' });
+    const safeName = path.basename(fileName);
+    const ext = path.extname(safeName).toLowerCase();
+    if (!['.csv'].includes(ext)) {
+      return res.status(400).json({ error: 'Unsupported file type.' });
+    }
+    await fs.ensureDir(appleMusicDataDir);
+    const fileBuffer = Buffer.from(content, 'base64');
+    if (fileBuffer.length > 50 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File size exceeds the 50MB limit.' });
+    }
+    await fs.writeFile(path.join(appleMusicDataDir, safeName), fileBuffer);
+    logger.info('Apple Music file uploaded', { ip: req.ip, file: safeName });
+    res.json({ success: true, message: `Successfully uploaded ${safeName}` });
+  } catch (err) {
+    logger.error('Failed to upload Apple Music file', { error: err.message, ip: req.ip });
+    res.status(500).json({ error: 'Failed to upload Apple Music file.' });
+  }
+});
 
 // Get Spotify recap stats
 app.get('/api/stats', async (req, res) => {
