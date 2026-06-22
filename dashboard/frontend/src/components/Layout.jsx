@@ -3,7 +3,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAppContext } from '../AppContext';
 import { ThemeProvider, useTheme } from './ThemeProvider';
 import Icons from './Icons';
-import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, SidebarRail, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 
@@ -147,7 +147,11 @@ export default function Layout() {
                 </span>
               </div>
             </SidebarFooter>
-            <SidebarRail />
+
+            {/* Middle Edge Floating Trigger */}
+            <div className="absolute top-1/2 -translate-y-1/2 -right-3.5 z-50 hidden md:flex">
+              <SidebarTrigger className="size-7 rounded-full border border-white/20 bg-background/80 hover:bg-background/95 backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.15)] flex items-center justify-center text-foreground hover:scale-105 hover:text-primary transition-all duration-300 [&>svg]:size-3.5" />
+            </div>
           </Sidebar>
 
           {/* Main Content Area */}
