@@ -11,6 +11,8 @@ env/
 *.egg-info/
 dist/
 build/
+.env
+.env.*
 
 # =========================
 # Node / Dashboard
