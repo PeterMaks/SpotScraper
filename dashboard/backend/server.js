@@ -248,9 +248,16 @@ app.get('/api/apple/stats', async (req, res) => {
 // List Apple Music source files
 app.get('/api/apple/sources', async (req, res) => {
   try {
-    await fs.ensureDir(appleMusicDataDir);
-    const files = await fs.readdir(appleMusicDataDir);
-    const sources = files.filter(f => f.endsWith('.csv'));
+    const baseDir = path.join(__dirname, '../../apple_music_data');
+    const sources = [];
+    for (const sub of ['csvs', 'jsons']) {
+      const dir = path.join(baseDir, sub);
+      await fs.ensureDir(dir);
+      const files = await fs.readdir(dir);
+      for (const f of files) {
+        if (f.endsWith('.csv') || f.endsWith('.json')) sources.push(`${sub}/${f}`);
+      }
+    }
     res.json({ sources });
   } catch (err) {
     logger.error('Failed to read Apple sources', { error: err.message, ip: req.ip });
@@ -265,17 +272,20 @@ app.post('/api/apple/upload', async (req, res) => {
     if (!fileName || !content) return res.status(400).json({ error: 'Missing fileName or content.' });
     const safeName = path.basename(fileName);
     const ext = path.extname(safeName).toLowerCase();
-    if (!['.csv'].includes(ext)) {
-      return res.status(400).json({ error: 'Unsupported file type.' });
+    // ponytail: route by extension — csvs/ for play history, jsons/ for library metadata (genres)
+    const subDir = ext === '.json' ? 'jsons' : ext === '.csv' ? 'csvs' : null;
+    if (!subDir) {
+      return res.status(400).json({ error: 'Unsupported file type. Only .csv and .json files are accepted.' });
     }
-    await fs.ensureDir(appleMusicDataDir);
+    const targetDir = path.join(__dirname, '../../apple_music_data', subDir);
+    await fs.ensureDir(targetDir);
     const fileBuffer = Buffer.from(content, 'base64');
     if (fileBuffer.length > 50 * 1024 * 1024) {
       return res.status(400).json({ error: 'File size exceeds the 50MB limit.' });
     }
-    await fs.writeFile(path.join(appleMusicDataDir, safeName), fileBuffer);
-    logger.info('Apple Music file uploaded', { ip: req.ip, file: safeName });
-    res.json({ success: true, message: `Successfully uploaded ${safeName}` });
+    await fs.writeFile(path.join(targetDir, safeName), fileBuffer);
+    logger.info('Apple Music file uploaded', { ip: req.ip, file: safeName, subDir });
+    res.json({ success: true, message: `Successfully uploaded ${safeName} to ${subDir}/` });
   } catch (err) {
     logger.error('Failed to upload Apple Music file', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to upload Apple Music file.' });

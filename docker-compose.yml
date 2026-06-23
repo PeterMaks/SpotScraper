@@ -50,6 +50,7 @@ services:
     volumes:
       - downloads_data:/app/downloads
       - spotify_data:/app/spotify_data
+      - apple_music_data:/app/apple_music_data
       - backend_data:/app/data
     environment:
       - NODE_ENV=production
@@ -81,6 +82,8 @@ volumes:
   downloads_data:
     driver: local
   spotify_data:
+    driver: local
+  apple_music_data:
     driver: local
   backend_data:
     driver: local

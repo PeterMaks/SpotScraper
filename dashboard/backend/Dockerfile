@@ -22,7 +22,7 @@ COPY dashboard/backend/package.json dashboard/backend/package-lock.json ./dashbo
 RUN cd dashboard/backend && npm ci --omit=dev
 
 # Copy backend source
-COPY dashboard/backend/server.js dashboard/backend/parser.js dashboard/backend/logger.js ./dashboard/backend/
+COPY dashboard/backend/server.js dashboard/backend/parser.js dashboard/backend/apple_parser.js dashboard/backend/logger.js ./dashboard/backend/
 
 # Copy and prepare entrypoint
 COPY dashboard/backend/docker-entrypoint.sh /docker-entrypoint.sh
