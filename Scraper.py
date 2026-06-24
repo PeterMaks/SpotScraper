@@ -1072,7 +1072,7 @@ if __name__ == "__main__":
         print(f"\nRunning test on first {test_limit} items...")
         logger.info("Scraper execution started (batch)", extra={"target_website": target_website, "limit": test_limit, "total_found": len(items_to_download)})
     
-    download_links = search_and_scrape(items_to_download[:test_limit], target_website, is_single_query=is_single_query)
+    download_links = search_and_scrape(items_to_download if test_limit == 0 else items_to_download[:test_limit], target_website, is_single_query=is_single_query)
     
     print("\nDownload complete. Check the 'downloads' folder!")
     logger.info("Scraper execution finished")

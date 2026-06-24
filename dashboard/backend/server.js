@@ -730,7 +730,7 @@ app.post('/api/scrape/start', (req, res, next) => {
       if (query) {
         args = ['query', query];
       } else {
-        args = [mode || 'albums', String(limit || 5)];
+        args = [String(limit !== undefined ? limit : 5), 'https://qobuz.squid.wtf'];
         if (safeSourceFile) args.push(safeSourceFile);
       }
     } else {
@@ -738,7 +738,7 @@ app.post('/api/scrape/start', (req, res, next) => {
       if (query) {
         args = ['query', query, website || 'https://qobuz.squid.wtf'];
       } else {
-        args = [String(limit || 3), website || 'https://qobuz.squid.wtf'];
+        args = [String(limit !== undefined ? limit : 3), website || 'https://qobuz.squid.wtf'];
         if (safeSourceFile) args.push(safeSourceFile);
       }
     }
