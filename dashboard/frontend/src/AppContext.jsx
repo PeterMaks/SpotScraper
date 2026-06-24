@@ -41,12 +41,11 @@ export const AppProvider = ({ children }) => {
   // Global Audio Player State
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const audioRef = useRef(null);
   const pendingPlayRef = useRef(false);
-  const timeUpdateRAF = useRef(null);
+  // timeUpdateRAF removed for direct DOM updates
 
   // Search/Filters
   const [dashSearch, setDashSearch] = useState('');
@@ -136,7 +135,6 @@ export const AppProvider = ({ children }) => {
     } else {
       loadAndPlay(trackFile);
       setCurrentTrack(trackFile);
-      setCurrentTime(0);
       setDuration(0);
       setIsPlaying(true);
     }
@@ -158,7 +156,6 @@ export const AppProvider = ({ children }) => {
     const nextTrack = activeList[nextIndex];
     loadAndPlay(nextTrack);
     setCurrentTrack(nextTrack);
-    setCurrentTime(0);
     setDuration(0);
     setIsPlaying(true);
   };
@@ -174,18 +171,11 @@ export const AppProvider = ({ children }) => {
     const prevTrack = activeList[prevIndex];
     loadAndPlay(prevTrack);
     setCurrentTrack(prevTrack);
-    setCurrentTime(0);
     setDuration(0);
     setIsPlaying(true);
   };
 
-  const handleTimeUpdate = () => {
-    if (timeUpdateRAF.current) return;
-    timeUpdateRAF.current = requestAnimationFrame(() => {
-      if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
-      timeUpdateRAF.current = null;
-    });
-  };
+  // handleTimeUpdate removed for direct DOM updates
 
   const handleLoadedMetadata = () => {
     if (audioRef.current) setDuration(audioRef.current.duration);
@@ -193,7 +183,6 @@ export const AppProvider = ({ children }) => {
 
   const handleSeek = (e) => {
     const time = Number(e.target.value);
-    setCurrentTime(time);
     if (audioRef.current) audioRef.current.currentTime = time;
   };
 
@@ -356,12 +345,11 @@ export const AppProvider = ({ children }) => {
     logsFilter, setLogsFilter,
     currentTrack, setCurrentTrack,
     isPlaying, setIsPlaying,
-    currentTime, setCurrentTime,
     duration, setDuration,
     volume, setVolume,
-    audioRef, pendingPlayRef, timeUpdateRAF,
+    audioRef, pendingPlayRef,
     handlePlayTrack, handlePlayNext, handlePlayPrev,
-    handleTimeUpdate, handleLoadedMetadata, handleSeek, handleVolumeChange,
+    handleLoadedMetadata, handleSeek, handleVolumeChange,
     backendUrl
   };
 

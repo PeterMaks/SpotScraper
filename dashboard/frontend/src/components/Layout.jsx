@@ -38,18 +38,18 @@ export default function Layout() {
     currentTrack,
     isPlaying,
     setIsPlaying,
-    currentTime,
     duration,
     volume,
     audioRef,
     pendingPlayRef,
     handlePlayNext,
     handlePlayPrev,
-    handleTimeUpdate,
     handleLoadedMetadata,
-    handleSeek,
     handleVolumeChange,
   } = useAppContext();
+
+  const sliderRef = React.useRef(null);
+  const timeTextRef = React.useRef(null);
 
   const formatTime = (timeInSeconds) => {
     if (isNaN(timeInSeconds)) return "0:00";
@@ -177,7 +177,10 @@ export default function Layout() {
                 audioRef.current.play().catch(e => console.error("Playback failed", e));
               }
             }}
-            onTimeUpdate={handleTimeUpdate}
+            onTimeUpdate={(e) => {
+              if (sliderRef.current) sliderRef.current.value = e.target.currentTime;
+              if (timeTextRef.current) timeTextRef.current.innerText = formatTime(e.target.currentTime);
+            }}
             onLoadedMetadata={handleLoadedMetadata}
             onEnded={handlePlayNext}
           />
@@ -218,14 +221,17 @@ export default function Layout() {
                   </Button>
                 </div>
                 <div className="flex items-center gap-2 w-full max-w-md">
-                  <span className="text-[10px] font-medium text-muted-foreground w-8 text-right tabular-nums">{formatTime(currentTime)}</span>
+                  <span ref={timeTextRef} className="text-[10px] font-medium text-muted-foreground w-8 text-right tabular-nums">0:00</span>
                   <input 
+                    ref={sliderRef}
                     type="range" 
                     className="flex-1 h-1.5 cursor-pointer appearance-none rounded-full bg-secondary/50 accent-primary backdrop-blur-sm" 
                     min="0" 
                     max={duration || 0} 
-                    value={currentTime} 
-                    onChange={handleSeek}
+                    defaultValue="0" 
+                    onChange={(e) => {
+                      if (audioRef.current) audioRef.current.currentTime = e.target.value;
+                    }}
                   />
                   <span className="text-[10px] font-medium text-muted-foreground w-8 tabular-nums">{formatTime(duration)}</span>
                 </div>
