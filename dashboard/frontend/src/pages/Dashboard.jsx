@@ -214,7 +214,7 @@ export default function Dashboard() {
     : 'All Platforms';
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+    <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
