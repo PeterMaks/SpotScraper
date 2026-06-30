@@ -141,8 +141,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const getActiveList = () => {
-    const list = downloads.filter(file => file.name.toLowerCase().includes(downloadsSearch.toLowerCase()));
-    return list.length > 0 ? list : downloads;
+    return downloads.filter(file => file.name.toLowerCase().includes(downloadsSearch.toLowerCase()));
   };
 
   const handlePlayNext = () => {

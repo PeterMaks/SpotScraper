@@ -70,6 +70,7 @@ skills-lock.json
 *.sln
 *.sw?
 .DS_Store
+graphify-out/
 
 # =========================
 # OS-specific
@@ -82,3 +83,8 @@ docs/superpowers/specs/assets/spotify-brand/logo.svg
 docs/superpowers/specs/landing.html
 __pycache__/
 
+.graphify_ast.json
+.graphify_detect.json
+.graphify_python
+.graphify_analysis.json
+.graphify_extract.json

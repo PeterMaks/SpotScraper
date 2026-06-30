@@ -533,7 +533,7 @@ app.get('/api/logs', async (req, res) => {
 });
 
 // Internal Webhook for Scrapers
-app.post('/api/internal/log', express.json(), async (req, res) => {
+app.post('/api/internal/log', async (req, res) => {
   try {
     const { type, key, data } = req.body;
     if (type === 'downloadLinks') {

@@ -263,6 +263,8 @@ def parse_spotify_data(json_directory, specific_file=None):
                                             "release_date": release_date
                                         })
                         else:
+                            f.seek(0)
+                            reader = csv.reader(f)
                             for row in reader:
                                 if not row:
                                     continue
