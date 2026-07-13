@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../AppContext';
 import Icons from '../components/Icons';
@@ -324,8 +325,8 @@ export default function Downloads() {
         </div>
       </Card>
 
-      {selectedFiles.size > 0 && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-background border shadow-xl rounded-full px-6 py-3 flex items-center gap-6 z-40 animate-in slide-in-from-bottom-10 fade-in duration-300">
+      {selectedFiles.size > 0 && createPortal(
+        <div className={`fixed ${currentTrack ? 'bottom-24' : 'bottom-6'} left-1/2 -translate-x-1/2 w-[90%] max-w-2xl rounded-2xl border border-white/20 bg-background/80 backdrop-blur-3xl shadow-[0_8px_32px_rgba(0,0,0,0.25)] px-6 py-3 flex items-center justify-between gap-4 z-[110] animate-in slide-in-from-bottom-10 fade-in duration-300 transition-[bottom] duration-300`}>
           <span className="text-primary font-medium">{selectedFiles.size} items selected</span>
           <div className="flex items-center gap-2">
             <Button onClick={handleBatchDownload} className="rounded-full h-9">
@@ -338,7 +339,8 @@ export default function Downloads() {
               Cancel
             </Button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -26,8 +26,6 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
     }));
   }, [data, selectedYear]);
 
-  if (chartData.length === 0) return null;
-
   return (
     <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)] col-span-1 md:col-span-2 lg:col-span-3 transition-all duration-300">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2">
@@ -60,6 +58,11 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
         </div>
       </CardHeader>
       <CardContent>
+        {chartData.length === 0 ? (
+          <div className="w-full h-[280px] flex items-center justify-center">
+            <p className="text-muted-foreground text-sm">No listening data for {selectedYear === 'All' ? 'this platform' : selectedYear}.</p>
+          </div>
+        ) : (
         <div className="w-full h-[280px] animate-in fade-in duration-700">
           <ResponsiveContainer>
             <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -156,6 +159,7 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        )}
       </CardContent>
     </Card>
   );
