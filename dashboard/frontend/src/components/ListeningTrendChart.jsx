@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useTransition } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export default function ListeningTrendChart({ data = [], isAllPlatforms = false }) {
   const [selectedYear, setSelectedYear] = useState('All');
   const [splitPlatforms, setSplitPlatforms] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   // Extract unique years for the dropdown
   const years = useMemo(() => {
@@ -39,14 +40,14 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
               <input
                 type="checkbox"
                 checked={splitPlatforms}
-                onChange={(e) => setSplitPlatforms(e.target.checked)}
+                onChange={(e) => startTransition(() => setSplitPlatforms(e.target.checked))}
                 className="accent-primary rounded bg-transparent border-white/20 cursor-pointer"
               />
               Split Platforms
             </label>
           )}
           
-          <Select value={selectedYear} onValueChange={(v) => setSelectedYear(v)}>
+          <Select value={selectedYear} onValueChange={(v) => startTransition(() => setSelectedYear(v))}>
             <SelectTrigger className="w-[110px] h-8 text-xs font-semibold">
               <SelectValue placeholder="Select year" />
             </SelectTrigger>
@@ -88,10 +89,11 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
                 domain={['dataMin', 'dataMax']}
                 tickFormatter={(v) => {
                   const d = new Date(v);
+                  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                   if (selectedYear === 'All') {
-                    return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+                    return `${months[d.getUTCMonth()]} '${d.getUTCFullYear().toString().slice(2)}`;
                   }
-                  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+                  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
                 }}
                 axisLine={false}
                 tickLine={false}
@@ -123,6 +125,7 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
               />
               {(!splitPlatforms || !isAllPlatforms) ? (
                 <Area
+                  isAnimationActive={false}
                   type="monotone"
                   dataKey="hours"
                   name="Total Hours"
@@ -135,6 +138,7 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
               ) : (
                 <>
                   <Area
+                    isAnimationActive={false}
                     type="monotone"
                     dataKey="spotifyHours"
                     name="Spotify"
@@ -145,6 +149,7 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
                     activeDot={{ r: 5, fill: '#1DB954', stroke: '#fff', strokeWidth: 2 }}
                   />
                   <Area
+                    isAnimationActive={false}
                     type="monotone"
                     dataKey="appleHours"
                     name="Apple Music"

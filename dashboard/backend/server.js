@@ -254,8 +254,8 @@ app.get('/api/downloads/art/*', async (req, res) => {
       res.status(404).json({ error: 'No album art found' });
     }
   } catch (err) {
-    logger.error('Failed to extract album art', { error: err.message });
-    res.status(500).json({ error: 'Failed to extract album art' });
+    // ponytail: quietly return 404 on corrupted ID3 tags so the frontend image falls back gracefully without spamming the backend logs
+    res.status(404).json({ error: 'Album art missing or tag corrupted' });
   }
 });
 // Background process state

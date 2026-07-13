@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useDeferredValue, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../AppContext';
@@ -28,7 +28,10 @@ export default function Downloads() {
   const [selectedFiles, setSelectedFiles] = useState(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
 
-  const filteredDownloads = downloads.filter(file => file.name.toLowerCase().includes(downloadsSearch.toLowerCase()));
+  const deferredSearch = useDeferredValue(downloadsSearch);
+  const [isPending, startTransition] = useTransition();
+
+  const filteredDownloads = downloads.filter(file => file.name.toLowerCase().includes(deferredSearch.toLowerCase()));
 
   const handleSingleDownload = async (e) => {
     e.preventDefault();
@@ -95,15 +98,20 @@ export default function Downloads() {
       }
       setLastSelectedIndex(index);
     }
-    setSelectedFiles(newSelected);
+    startTransition(() => {
+      setSelectedFiles(newSelected);
+    });
   };
 
   const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      setSelectedFiles(new Set(filteredDownloads.map(f => f.name)));
-    } else {
-      setSelectedFiles(new Set());
-    }
+    const isChecked = e.target.checked;
+    startTransition(() => {
+      if (isChecked) {
+        setSelectedFiles(new Set(filteredDownloads.map(f => f.name)));
+      } else {
+        setSelectedFiles(new Set());
+      }
+    });
   };
 
   const handleBatchDelete = async () => {
