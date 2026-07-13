@@ -13,7 +13,7 @@ const { aggregateStats } = require('./parser');
 const { aggregateAppleStats } = require('./apple_parser');
 const logger = require('./logger');
 const archiver = require('archiver');
-
+const mm = require('music-metadata');
 // --- Global Log State ---
 const rootDir = path.join(__dirname, '../..');
 const downloadLinksPath = path.join(rootDir, 'download_links.json');
@@ -228,6 +228,36 @@ const downloadsDir = path.join(__dirname, '../../downloads');
 const appleMusicDataDir = path.join(__dirname, '../../apple_music_data/csvs');
 app.use('/api/downloads/file', express.static(downloadsDir));
 
+// Serve extracted album art directly from ID3 tags
+app.get('/api/downloads/art/*', async (req, res) => {
+  try {
+    const filename = decodeURIComponent(req.params[0]);
+    const filePath = path.join(downloadsDir, filename);
+    
+    // Security check to prevent directory traversal
+    if (!path.resolve(filePath).startsWith(path.resolve(downloadsDir))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    if (!await fs.pathExists(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    const metadata = await mm.parseFile(filePath, { duration: false });
+    const picture = metadata.common.picture && metadata.common.picture[0];
+    
+    if (picture) {
+      res.setHeader('Content-Type', picture.format);
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+      res.send(picture.data);
+    } else {
+      res.status(404).json({ error: 'No album art found' });
+    }
+  } catch (err) {
+    logger.error('Failed to extract album art', { error: err.message });
+    res.status(500).json({ error: 'Failed to extract album art' });
+  }
+});
 // Background process state
 let currentProcess = null;
 let processLog = '';

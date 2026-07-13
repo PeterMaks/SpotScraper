@@ -46,6 +46,7 @@ export default function Layout() {
     handlePlayPrev,
     handleLoadedMetadata,
     handleVolumeChange,
+    backendUrl,
   } = useAppContext();
 
   const sliderRef = React.useRef(null);
@@ -187,8 +188,15 @@ export default function Layout() {
           {currentTrack && (
             <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl rounded-2xl border border-white/20 bg-background/80 backdrop-blur-3xl shadow-[0_8px_32px_rgba(0,0,0,0.25)] p-3 flex items-center justify-between gap-4 z-[100] transition-all duration-500 ${isPlaying ? 'translate-y-0 opacity-100' : 'translate-y-0 opacity-100'}`}>
               <div className="flex items-center gap-3 w-1/3 min-w-[180px]">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/20 text-primary shadow-inner border border-white/10">
-                  <Icons.Music className="size-5 drop-shadow-md" />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-secondary text-secondary-foreground shadow-inner border border-white/10 overflow-hidden relative">
+                  <img 
+                    key={currentTrack.name}
+                    src={`${backendUrl}/api/downloads/art/${encodeURIComponent(currentTrack.name)}`} 
+                    className="w-full h-full object-cover absolute inset-0 z-10" 
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                    alt=""
+                  />
+                  <Icons.Music className="size-5 drop-shadow-md absolute z-0" />
                 </div>
                 <div className="flex flex-col overflow-hidden">
                   <span className="truncate font-semibold text-sm drop-shadow-sm" title={currentTrack.title || currentTrack.name.replace('.mp3', '')}>

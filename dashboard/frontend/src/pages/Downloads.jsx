@@ -292,8 +292,15 @@ export default function Downloads() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-                            <Icons.Music className="size-5" />
+                          <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground overflow-hidden relative">
+                            <img 
+                              src={`${backendUrl}/api/downloads/art/${encodeURIComponent(file.name)}`} 
+                              className="w-full h-full object-cover absolute inset-0 z-10" 
+                              loading="lazy"
+                              onError={(e) => { e.target.style.display = 'none'; }}
+                              alt=""
+                            />
+                            <Icons.Music className="size-5 absolute z-0" />
                           </div>
                           <div className="flex flex-col">
                             <span className={`font-medium ${isRowPlaying ? 'text-primary' : ''}`}>{title}</span>
