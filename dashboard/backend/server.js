@@ -1,17 +1,18 @@
 const express = require('express');
 const cors = require('cors');
+
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 fs.pathExists = async (p) => { try { await fs.access(p); return true; } catch { return false; } };
 fs.readJson = async (p) => JSON.parse(await fs.readFile(p, 'utf8'));
-fs.writeJson = async (p, d, o) => fs.writeFile(p, JSON.stringify(d, null, o?.spaces||0), 'utf8');
+fs.writeJson = async (p, d, o) => fs.writeFile(p, JSON.stringify(d, null, o?.spaces || 0), 'utf8');
 fs.ensureDir = async (p) => fs.mkdir(p, { recursive: true });
 fs.remove = async (p) => fs.rm(p, { recursive: true, force: true });
 const { spawn } = require('child_process');
 const { aggregateStats } = require('./parser');
 const { aggregateAppleStats } = require('./apple_parser');
-const logger = require('./logger');
+
 const archiver = require('archiver');
 const mm = require('music-metadata');
 // --- Global Log State ---
@@ -31,7 +32,7 @@ let inMemoryScrapeLog = {};
       inMemoryScrapeLog = await fs.readJson(scrapeLogPath);
     }
   } catch (err) {
-    logger.error('Failed to initialize logs from disk', { error: err.message });
+    console.error('Failed to initialize logs from disk', { error: err.message });
   }
 })();
 
@@ -67,18 +68,18 @@ async function loadUserMetadataMap() {
   const dataDir = path.join(__dirname, '../../spotify_data');
   const queryToMeta = {};
   const titleToMeta = {};
-  
+
   if (!(await fs.pathExists(dataDir))) {
     return { queryToMeta, titleToMeta };
   }
-  
+
   try {
     const files = await fs.readdir(dataDir);
-    
+
     for (const file of files) {
       const filePath = path.join(dataDir, file);
       const ext = path.extname(file).toLowerCase();
-      
+
       if (ext === '.json' && !file.toLowerCase().includes('playlist')) {
         try {
           const data = await fs.readJson(filePath);
@@ -88,15 +89,15 @@ async function loadUserMetadataMap() {
               const artist = entry.master_metadata_album_artist_name;
               const album = entry.master_metadata_album_album_name;
               const ms = entry.ms_played || 0;
-              
+
               if (track && artist) {
                 const query = `${track} ${artist}`;
                 const normQuery = normalizeStr(query);
                 const normTitle = normalizeStr(track);
-                
+
                 const currentDurationMs = (queryToMeta[normQuery] && queryToMeta[normQuery].durationMs) || 0;
                 const durationMs = Math.max(currentDurationMs, ms);
-                
+
                 const meta = {
                   title: track,
                   artist: artist,
@@ -104,7 +105,7 @@ async function loadUserMetadataMap() {
                   duration: durationMs > 0 ? formatDurationMs(durationMs) : '-',
                   durationMs: durationMs
                 };
-                
+
                 queryToMeta[normQuery] = meta;
                 if (!titleToMeta[normTitle] || titleToMeta[normTitle].durationMs < durationMs) {
                   titleToMeta[normTitle] = meta;
@@ -113,20 +114,20 @@ async function loadUserMetadataMap() {
             }
           }
         } catch (err) {
-          logger.warn(`Failed to parse user JSON file: ${file}`, { error: err.message });
+          console.warn(`Failed to parse user JSON file: ${file}`, { error: err.message });
         }
       } else if (ext === '.csv') {
         try {
           const content = await fs.readFile(filePath, 'utf-8');
           const rows = parseCSV(content);
-          
+
           for (const row of rows) {
             let track = '';
             let artist = '';
             let album = '';
             let durationMs = 0;
             let releaseDate = '';
-            
+
             Object.entries(row).forEach(([key, val]) => {
               const k = key.toLowerCase().trim();
               if (['track', 'song', 'title', 'name', 'track name', 'song name'].includes(k)) {
@@ -141,12 +142,12 @@ async function loadUserMetadataMap() {
                 releaseDate = val;
               }
             });
-            
+
             if (track) {
               const query = `${track} ${artist}`.trim();
               const normQuery = normalizeStr(query);
               const normTitle = normalizeStr(track);
-              
+
               const meta = {
                 title: track,
                 artist: artist || 'Unknown Artist',
@@ -155,20 +156,20 @@ async function loadUserMetadataMap() {
                 durationMs: durationMs,
                 releaseDate: releaseDate || ''
               };
-              
+
               queryToMeta[normQuery] = meta;
               titleToMeta[normTitle] = meta;
             }
           }
         } catch (err) {
-          logger.warn(`Failed to parse user CSV file: ${file}`, { error: err.message });
+          console.warn(`Failed to parse user CSV file: ${file}`, { error: err.message });
         }
       }
     }
   } catch (err) {
-    logger.error('Error loading user metadata maps', { error: err.message });
+    console.error('Error loading user metadata maps', { error: err.message });
   }
-  
+
   return { queryToMeta, titleToMeta };
 }
 
@@ -233,19 +234,19 @@ app.get('/api/downloads/art/*', async (req, res) => {
   try {
     const filename = decodeURIComponent(req.params[0]);
     const filePath = path.join(downloadsDir, filename);
-    
+
     // Security check to prevent directory traversal
     if (!path.resolve(filePath).startsWith(path.resolve(downloadsDir))) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    
+
     if (!await fs.pathExists(filePath)) {
       return res.status(404).json({ error: 'File not found' });
     }
 
     const metadata = await mm.parseFile(filePath, { duration: false });
     const picture = metadata.common.picture && metadata.common.picture[0];
-    
+
     if (picture) {
       res.setHeader('Content-Type', picture.format);
       res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
@@ -270,7 +271,7 @@ app.get('/api/apple/stats', async (req, res) => {
     const stats = await aggregateAppleStats();
     res.json(stats);
   } catch (err) {
-    logger.error('Failed to aggregate Apple stats', { error: err.message, ip: req.ip });
+    console.error('Failed to aggregate Apple stats', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to aggregate Apple stats' });
   }
 });
@@ -290,7 +291,7 @@ app.get('/api/apple/sources', async (req, res) => {
     }
     res.json({ sources });
   } catch (err) {
-    logger.error('Failed to read Apple sources', { error: err.message, ip: req.ip });
+    console.error('Failed to read Apple sources', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to read Apple sources' });
   }
 });
@@ -314,10 +315,10 @@ app.post('/api/apple/upload', async (req, res) => {
       return res.status(400).json({ error: 'File size exceeds the 50MB limit.' });
     }
     await fs.writeFile(path.join(targetDir, safeName), fileBuffer);
-    logger.info('Apple Music file uploaded', { ip: req.ip, file: safeName, subDir });
+    console.log('Apple Music file uploaded', { ip: req.ip, file: safeName, subDir });
     res.json({ success: true, message: `Successfully uploaded ${safeName} to ${subDir}/` });
   } catch (err) {
-    logger.error('Failed to upload Apple Music file', { error: err.message, ip: req.ip });
+    console.error('Failed to upload Apple Music file', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to upload Apple Music file.' });
   }
 });
@@ -328,7 +329,7 @@ app.get('/api/stats', async (req, res) => {
     const stats = await aggregateStats();
     res.json(stats);
   } catch (err) {
-    logger.error('Failed to aggregate stats', { error: err.message, ip: req.ip });
+    console.error('Failed to aggregate stats', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to aggregate stats' });
   }
 });
@@ -341,7 +342,7 @@ app.get('/api/downloads', async (req, res) => {
     await fs.ensureDir(downloadsDir);
     const ents = await fs.readdir(downloadsDir, { recursive: true, withFileTypes: true });
     const filePaths = ents.filter(e => e.isFile()).map(e => path.join(e.parentPath || e.path, e.name));
-    
+
     // Load metadata from root cache files
     const rootDir = path.join(__dirname, '../..');
     let cacheMap = {};
@@ -349,7 +350,7 @@ app.get('/api/downloads', async (req, res) => {
     try {
       const cacheData = await fs.readJson(path.join(rootDir, 'download_cache.json')).catch(() => ({}));
       const metaData = await fs.readJson(path.join(rootDir, 'download_links.json')).catch(() => ({}));
-      
+
       // cacheData maps query string to { file_path: "C:\\...\\downloads\\Song.mp3" }
       for (const [query, val] of Object.entries(cacheData)) {
         if (val && val.file_path) {
@@ -359,7 +360,7 @@ app.get('/api/downloads', async (req, res) => {
       }
       metaMap = metaData;
     } catch (e) {
-      logger.warn('Error reading metadata cache', { error: e.message });
+      console.warn('Error reading metadata cache', { error: e.message });
     }
 
     const userMetadataMap = await getUserMetadata();
@@ -369,7 +370,7 @@ app.get('/api/downloads', async (req, res) => {
       const relativePath = path.relative(downloadsDir, filePath).replace(/\\/g, '/');
       const basename = path.basename(filePath);
       const stat = await fs.stat(filePath);
-      
+
       let metadata = {};
       const query = cacheMap[basename];
       if (query && metaMap[query]) {
@@ -380,12 +381,12 @@ app.get('/api/downloads', async (req, res) => {
           duration: metaMap[query].duration
         };
       }
-      
+
       let title = metadata.title;
       let artist = metadata.artist;
       let album = metadata.album;
       let duration = metadata.duration;
-      
+
       // Dynamic fallback search in user provided metadata
       let userMeta = null;
       if (query) {
@@ -396,14 +397,14 @@ app.get('/api/downloads', async (req, res) => {
         const cleanFilename = normalizeStr(path.basename(filePath, '.mp3'));
         userMeta = userMetadataMap.titleToMeta[cleanFilename];
       }
-      
+
       if (userMeta) {
         if (isPlaceholder(title)) title = userMeta.title;
         if (isPlaceholder(artist)) artist = userMeta.artist;
         if (isPlaceholder(album)) album = userMeta.album;
         if (isPlaceholder(duration)) duration = userMeta.duration;
       }
-      
+
       // Basic formatting splits as a final fallback if still placeholder and query is present
       if (isPlaceholder(title) && query) {
         const parts = query.split(' - ');
@@ -414,7 +415,7 @@ app.get('/api/downloads', async (req, res) => {
           title = query;
         }
       }
-      
+
       // Ensure defaults if still placeholders
       if (isPlaceholder(title)) title = path.basename(filePath, '.mp3');
       if (isPlaceholder(artist)) artist = 'Unknown Artist';
@@ -438,7 +439,7 @@ app.get('/api/downloads', async (req, res) => {
     list.sort((a, b) => b.mtime - a.mtime);
     res.json({ files: list });
   } catch (err) {
-    logger.error('Failed to read downloads directory', { error: err.message, ip: req.ip });
+    console.error('Failed to read downloads directory', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to read downloads directory' });
   }
 });
@@ -454,19 +455,19 @@ app.delete('/api/downloads/file/*', async (req, res) => {
     const resolvedDownloadsDir = path.resolve(downloadsDir);
 
     if (!resolvedPath.startsWith(resolvedDownloadsDir)) {
-      logger.warn('Directory traversal attempt detected', { ip: req.ip, path: relativePath });
+      console.warn('Directory traversal attempt detected', { ip: req.ip, path: relativePath });
       return res.status(403).json({ error: 'Access denied: Directory traversal detected.' });
     }
 
     if (await fs.pathExists(resolvedPath)) {
       await fs.remove(resolvedPath);
-      logger.info('File deleted', { ip: req.ip, file: relativePath });
+      console.log('File deleted', { ip: req.ip, file: relativePath });
       res.json({ success: true, message: `Deleted ${relativePath}` });
     } else {
       res.status(404).json({ error: 'File not found' });
     }
   } catch (err) {
-    logger.error('Failed to delete file', { error: err.message, ip: req.ip, file: req.params[0] });
+    console.error('Failed to delete file', { error: err.message, ip: req.ip, file: req.params[0] });
     res.status(500).json({ error: 'Failed to delete file' });
   }
 });
@@ -500,11 +501,11 @@ app.post('/api/downloads/delete-batch', async (req, res) => {
         errors.push({ file: relativePath, error: 'File not found' });
       }
     }
-    
-    logger.info('Batch delete completed', { ip: req.ip, deletedCount: deleted.length, errorCount: errors.length });
+
+    console.log('Batch delete completed', { ip: req.ip, deletedCount: deleted.length, errorCount: errors.length });
     res.json({ success: true, deleted, errors });
   } catch (err) {
-    logger.error('Failed batch delete', { error: err.message, ip: req.ip });
+    console.error('Failed batch delete', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed batch delete' });
   }
 });
@@ -518,15 +519,15 @@ app.post('/api/downloads/zip', async (req, res) => {
     }
 
     const resolvedDownloadsDir = path.resolve(downloadsDir);
-    
+
     res.attachment('spotscraper_batch.zip');
     const archive = archiver('zip', {
       zlib: { level: 0 } // Fast compression since MP3s are already compressed
     });
 
-    archive.on('error', function(err) {
-      logger.error('Archive error', { error: err.message });
-      if (!res.headersSent) res.status(500).send({error: err.message});
+    archive.on('error', function (err) {
+      console.error('Archive error', { error: err.message });
+      if (!res.headersSent) res.status(500).send({ error: err.message });
     });
 
     archive.pipe(res);
@@ -542,7 +543,7 @@ app.post('/api/downloads/zip', async (req, res) => {
 
     archive.finalize();
   } catch (err) {
-    logger.error('Failed batch zip', { error: err.message, ip: req.ip });
+    console.error('Failed batch zip', { error: err.message, ip: req.ip });
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed batch zip' });
     }
@@ -557,7 +558,7 @@ app.get('/api/logs', async (req, res) => {
       scrapeLog: inMemoryScrapeLog
     });
   } catch (err) {
-    logger.error('Failed to load logs', { error: err.message, ip: req.ip });
+    console.error('Failed to load logs', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to load logs' });
   }
 });
@@ -569,17 +570,17 @@ app.post('/api/internal/log', async (req, res) => {
     if (type === 'downloadLinks') {
       inMemoryDownloadLinks[key] = data;
       fs.writeJson(downloadLinksPath, inMemoryDownloadLinks, { spaces: 4 }).catch(err => {
-        logger.error('Failed to flush downloadLinks to disk', { error: err.message });
+        console.error('Failed to flush downloadLinks to disk', { error: err.message });
       });
     } else if (type === 'scrapeLog') {
       inMemoryScrapeLog[key] = data;
       fs.writeJson(scrapeLogPath, inMemoryScrapeLog, { spaces: 4 }).catch(err => {
-        logger.error('Failed to flush scrapeLog to disk', { error: err.message });
+        console.error('Failed to flush scrapeLog to disk', { error: err.message });
       });
     }
     res.status(200).send('OK');
   } catch (err) {
-    logger.error('Internal log error', { error: err.message });
+    console.error('Internal log error', { error: err.message });
     res.status(500).send('Error');
   }
 });
@@ -589,7 +590,7 @@ async function archiveLogs(downloadLinksKeys, scrapeLogKeys, allDownloadLinks, a
   const rootDir = path.join(__dirname, '../..');
   const archiveLinksPath = path.join(rootDir, 'archive_download_links.json');
   const archiveScrapePath = path.join(rootDir, 'archive_scrape_log.json');
-  
+
   if (downloadLinksKeys.length > 0) {
     let archiveLinks = {};
     if (await fs.pathExists(archiveLinksPath)) {
@@ -649,7 +650,7 @@ app.post('/api/logs/delete-batch', async (req, res) => {
 
     res.json({ success: true, message: `Deleted ${queries.length} logs.` });
   } catch (err) {
-    logger.error('Failed to batch delete logs', { error: err.message, ip: req.ip });
+    console.error('Failed to batch delete logs', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to batch delete logs' });
   }
 });
@@ -670,7 +671,7 @@ app.post('/api/logs/clear', async (req, res) => {
 
     res.json({ success: true, message: 'All logs cleared and archived.' });
   } catch (err) {
-    logger.error('Failed to clear logs', { error: err.message, ip: req.ip });
+    console.error('Failed to clear logs', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to clear logs' });
   }
 });
@@ -703,17 +704,17 @@ app.post('/api/upload', async (req, res) => {
     // Restrict size to 50MB
     const MAX_UPLOAD_SIZE = 50 * 1024 * 1024;
     if (fileBuffer.length > MAX_UPLOAD_SIZE) {
-      logger.warn('File upload exceeded size limit', { ip: req.ip, file: safeName, size: fileBuffer.length });
+      console.warn('File upload exceeded size limit', { ip: req.ip, file: safeName, size: fileBuffer.length });
       return res.status(400).json({ error: 'File size exceeds the 50MB limit.' });
     }
 
     await fs.writeFile(targetPath, fileBuffer);
     cachedUserMetadata = null; // Invalidate cache so it is rebuilt on the next query
 
-    logger.info('File uploaded successfully', { ip: req.ip, file: safeName });
+    console.log('File uploaded successfully', { ip: req.ip, file: safeName });
     res.json({ success: true, message: `Successfully uploaded ${safeName}` });
   } catch (err) {
-    logger.error('Failed to upload file', { error: err.message, ip: req.ip });
+    console.error('Failed to upload file', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to upload file.' });
   }
 });
@@ -729,7 +730,7 @@ app.get('/api/sources', async (req, res) => {
     const sources = files.filter(f => f.endsWith('.json') || f.endsWith('.csv') || f.endsWith('.xlsx') || f.endsWith('.xls'));
     res.json({ sources });
   } catch (err) {
-    logger.error('Failed to read sources', { error: err.message, ip: req.ip });
+    console.error('Failed to read sources', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to read sources' });
   }
 });
@@ -742,7 +743,7 @@ app.post('/api/scrape/start', (req, res, next) => {
     }
 
     const { script, limit, website, mode, query, sourceFile } = req.body;
-    
+
     processType = script || 'api';
     processLog = `Starting ${processType === 'selenium' ? 'High Quality - Albums (320kbps)' : 'Fast MP3 - Tracks (192kbps)'}...\n`;
     if (sourceFile) processLog += `Using data source: ${sourceFile}\n`;
@@ -779,7 +780,7 @@ app.post('/api/scrape/start', (req, res, next) => {
     let pythonExecutable = 'python';
     const venvWinPath = path.join(rootDir, '.venv', 'Scripts', 'python.exe');
     const venvNixPath = path.join(rootDir, '.venv', 'bin', 'python');
-    
+
     if (fsSync.existsSync(venvWinPath)) {
       pythonExecutable = venvWinPath;
     } else if (fsSync.existsSync(venvNixPath)) {
@@ -788,8 +789,8 @@ app.post('/api/scrape/start', (req, res, next) => {
 
     currentProcess = spawn(pythonExecutable, [scriptPath, ...args], {
       cwd: rootDir,
-      env: { 
-        ...process.env, 
+      env: {
+        ...process.env,
         PYTHONUNBUFFERED: '1',
         PYTHONIOENCODING: 'utf-8',
         PYTHONUTF8: '1'
@@ -812,20 +813,20 @@ app.post('/api/scrape/start', (req, res, next) => {
     });
 
     currentProcess.on('error', (err) => {
-      logger.error('Failed to start scrape process', { error: err.message, scriptPath, args });
+      console.error('Failed to start scrape process', { error: err.message, scriptPath, args });
       processLog += `\nFailed to start process: ${err.message}\n`;
       processStatus = 'error';
       currentProcess = null;
     });
 
     currentProcess.on('close', (code) => {
-      logger.info('Scrape process finished', { code, scriptPath });
+      console.log('Scrape process finished', { code, scriptPath });
       processLog += `\nProcess exited with code ${code}\n`;
       processStatus = code === 0 ? 'success' : 'error';
       currentProcess = null;
     });
 
-    logger.info('Scrape process started', { ip: req.ip, script: processType, query, limit, sourceFile: safeSourceFile });
+    console.log('Scrape process started', { ip: req.ip, script: processType, query, limit, sourceFile: safeSourceFile });
     res.json({ success: true, status: processStatus });
   } catch (err) {
     next(err);
@@ -849,7 +850,7 @@ app.post('/api/scrape/stop', (req, res) => {
     processStatus = 'idle';
     processLog += '\n--- Process terminated by user ---\n';
     currentProcess = null;
-    logger.info('Scrape process stopped by user', { ip: req.ip });
+    console.log('Scrape process stopped by user', { ip: req.ip });
     res.json({ success: true, message: 'Scrape process cancelled.' });
   } else {
     res.status(400).json({ error: 'No scrape process running.' });
@@ -858,12 +859,12 @@ app.post('/api/scrape/stop', (req, res) => {
 
 // Global Error Handler Middleware (CWE-756 / CWE-248)
 app.use((err, req, res, next) => {
-  logger.error('Unhandled server error', { error: err.message, stack: err.stack, ip: req.ip, path: req.path });
+  console.error('Unhandled server error', { error: err.message, stack: err.stack, ip: req.ip, path: req.path });
   res.status(500).json({ error: 'An unexpected server error occurred. Please try again later.' });
 });
 
 // Start Express Server
 const host = process.env.HOST || '127.0.0.1';
 app.listen(port, host, () => {
-  logger.info(`Backend listening at http://${host}:${port}`);
+  console.log(`Backend listening at http://${host}:${port}`);
 });
