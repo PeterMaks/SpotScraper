@@ -193,6 +193,7 @@ export default function Layout() {
                     key={currentTrack.name}
                     src={`${backendUrl}/api/downloads/art/${encodeURIComponent(currentTrack.name)}`} 
                     className="w-full h-full object-cover absolute inset-0 z-10" 
+                    loading="lazy"
                     onError={(e) => { e.target.style.display = 'none'; }}
                     alt=""
                   />
