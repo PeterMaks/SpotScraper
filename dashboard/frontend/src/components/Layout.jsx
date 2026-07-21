@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAppContext } from '../AppContext';
@@ -72,11 +73,11 @@ export default function Layout() {
           <Sidebar variant="inset" collapsible="icon" className="backdrop-blur-2xl border-r border-white/20 dark:border-white/10">
             <SidebarHeader>
               <div className="flex items-center justify-between p-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold shrink-0 shadow-lg shadow-green-500/20">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold shrink-0 shadow-lg shadow-green-500/20 text-lg">
                     S
                   </div>
-                  <span className="font-semibold text-lg truncate group-data-[collapsible=icon]:hidden drop-shadow-sm">SpotScraper</span>
+                  <span className="font-bold text-xl truncate group-data-[collapsible=icon]:hidden drop-shadow-sm tracking-tight">SpotScraper</span>
                 </div>
                 {/* Desktop Trigger inside the Sidebar */}
                 <div className="flex items-center gap-1 group-data-[collapsible=icon]:hidden">
@@ -86,45 +87,45 @@ export default function Layout() {
               </div>
             </SidebarHeader>
             
-            <SidebarContent>
+            <SidebarContent className="px-2 py-4">
               <SidebarGroup>
-                <SidebarMenu>
+                <SidebarMenu className="gap-2">
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={location.pathname.startsWith('/dashboard')} tooltip="Dashboard">
+                    <SidebarMenuButton asChild isActive={location.pathname.startsWith('/dashboard')} tooltip="Dashboard" className="h-11 text-base font-medium rounded-xl">
                       <NavLink to="/dashboard">
-                        <Icons.Dashboard />
+                        <Icons.Dashboard className="size-5" />
                         <span>Dashboard</span>
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={location.pathname.startsWith('/scraper')} tooltip="Scraper Control">
+                    <SidebarMenuButton asChild isActive={location.pathname.startsWith('/scraper')} tooltip="Scraper Control" className="h-11 text-base font-medium rounded-xl">
                       <NavLink to="/scraper">
-                        <Icons.Scraper />
+                        <Icons.Scraper className="size-5" />
                         <span>Scraper Control</span>
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={location.pathname.startsWith('/downloads')} tooltip="Downloads">
+                    <SidebarMenuButton asChild isActive={location.pathname.startsWith('/downloads')} tooltip="Downloads" className="h-11 text-base font-medium rounded-xl">
                       <NavLink to="/downloads">
-                        <Icons.Downloads />
+                        <Icons.Downloads className="size-5" />
                         <span>Downloads ({downloads.length})</span>
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={location.pathname.startsWith('/logs')} tooltip="Detailed Logs">
+                    <SidebarMenuButton asChild isActive={location.pathname.startsWith('/logs')} tooltip="Detailed Logs" className="h-11 text-base font-medium rounded-xl">
                       <NavLink to="/logs">
-                        <Icons.Logs />
+                        <Icons.Logs className="size-5" />
                         <span>Detailed Logs</span>
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={location.pathname.startsWith('/acquire')} tooltip="Data Guide">
+                    <SidebarMenuButton asChild isActive={location.pathname.startsWith('/acquire')} tooltip="Data Guide" className="h-11 text-base font-medium rounded-xl">
                       <NavLink to="/acquire">
-                        <Icons.Acquire />
+                        <Icons.Acquire className="size-5" />
                         <span>Data Guide</span>
                       </NavLink>
                     </SidebarMenuButton>
@@ -134,9 +135,9 @@ export default function Layout() {
             </SidebarContent>
 
             <SidebarFooter>
-              <div className="p-4 flex items-center gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2 bg-sidebar/50 rounded-xl m-2 border border-sidebar-border backdrop-blur-md">
-                <span className={`size-2.5 rounded-full shrink-0 shadow-[0_0_8px_currentColor] ${scraperStatus === 'running' ? 'bg-blue-500 text-blue-500 animate-pulse' : scraperStatus === 'success' ? 'bg-green-500 text-green-500' : scraperStatus === 'error' ? 'bg-red-500 text-red-500' : 'bg-gray-500 text-gray-500'}`}></span>
-                <span className="text-sm font-medium text-muted-foreground truncate group-data-[collapsible=icon]:hidden drop-shadow-sm">
+              <div className="p-4 flex items-center gap-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2 bg-sidebar/50 rounded-xl m-2 border border-sidebar-border backdrop-blur-md">
+                <span className={`size-3 rounded-full shrink-0 ${scraperStatus === 'running' ? 'bg-blue-500 animate-pulse shadow-[0_0_10px_currentColor]' : scraperStatus === 'success' ? 'bg-green-500 shadow-[0_0_10px_currentColor]' : scraperStatus === 'error' ? 'bg-red-500 shadow-[0_0_10px_currentColor]' : 'bg-gray-500'}`}></span>
+                <span className="text-sm font-medium text-muted-foreground truncate group-data-[collapsible=icon]:hidden">
                   {scraperStatus === 'running' 
                     ? 'Scraper Running' 
                     : scraperStatus === 'success' 
@@ -150,7 +151,7 @@ export default function Layout() {
 
             {/* Middle Edge Floating Trigger */}
             <div className="absolute top-1/2 -translate-y-1/2 -right-3.5 z-50 hidden md:flex">
-              <SidebarTrigger className="size-7 rounded-full border border-white/20 bg-background/80 hover:bg-background/95 backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.15)] flex items-center justify-center text-foreground hover:scale-105 hover:text-primary transition-all duration-300 [&>svg]:size-3.5" />
+              <SidebarTrigger className="size-7 rounded-full border border-white/20 bg-background/80 hover:bg-background/95 backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.15)] flex items-center justify-center text-foreground hover:scale-110 hover:text-primary transition-all duration-300 [&>svg]:size-3.5" />
             </div>
           </Sidebar>
 
@@ -162,8 +163,10 @@ export default function Layout() {
               <ThemeToggle className="bg-background/50 backdrop-blur-md border border-white/10 shadow-sm" />
             </div>
             
-            <div className="flex-1 overflow-auto p-4 pt-16 md:pt-6 md:p-6 lg:p-8 custom-scrollbar">
-              <Outlet />
+            <div className="flex-1 overflow-auto p-4 pt-16 md:pt-8 md:p-6 lg:p-10 custom-scrollbar">
+              <div className="container mx-auto max-w-7xl">
+                <Outlet />
+              </div>
             </div>
           </main>
           
@@ -186,9 +189,9 @@ export default function Layout() {
           />
 
           {currentTrack && (
-            <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl rounded-2xl border border-white/20 bg-background/80 backdrop-blur-3xl shadow-[0_8px_32px_rgba(0,0,0,0.25)] p-3 flex items-center justify-between gap-4 z-[100] transition-all duration-500 ${isPlaying ? 'translate-y-0 opacity-100' : 'translate-y-0 opacity-100'}`}>
-              <div className="flex items-center gap-3 shrink min-w-0 flex-1">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-secondary text-secondary-foreground shadow-inner border border-white/10 overflow-hidden relative">
+            <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-3xl rounded-2xl border border-white/20 bg-background/80 backdrop-blur-3xl shadow-[0_8px_32px_rgba(0,0,0,0.25)] p-4 flex items-center justify-between gap-6 z-[100] transition-all duration-500`}>
+              <div className="flex items-center gap-4 shrink min-w-0 flex-1">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-secondary text-secondary-foreground shadow-inner border border-white/10 overflow-hidden relative">
                   <img 
                     key={currentTrack.name}
                     src={`${backendUrl}/api/downloads/art/${encodeURIComponent(currentTrack.name)}`} 
@@ -197,39 +200,39 @@ export default function Layout() {
                     onError={(e) => { e.target.style.display = 'none'; }}
                     alt=""
                   />
-                  <Icons.Music className="size-5 drop-shadow-md absolute z-0" />
+                  <Icons.Music className="size-6 drop-shadow-md absolute z-0" />
                 </div>
                 <div className="flex flex-col overflow-hidden">
-                  <span className="truncate font-semibold text-sm drop-shadow-sm" title={currentTrack.title || currentTrack.name.replace('.mp3', '')}>
+                  <span className="truncate font-bold text-sm drop-shadow-sm" title={currentTrack.title || currentTrack.name.replace('.mp3', '')}>
                     {currentTrack.title || currentTrack.name.replace('.mp3', '')}
                   </span>
-                  <span className="truncate text-xs text-muted-foreground drop-shadow-sm" title={currentTrack.artist || 'Unknown Artist'}>
+                  <span className="truncate text-xs text-muted-foreground font-medium" title={currentTrack.artist || 'Unknown Artist'}>
                     {currentTrack.artist || 'Unknown Artist'}
                   </span>
                 </div>
               </div>
               
-              <div className="flex flex-col items-center gap-1 shrink-0">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col items-center gap-1.5 shrink-0 w-1/2">
+                <div className="flex items-center gap-3">
                   <Button variant="ghost" size="icon" className="hover:bg-white/10 rounded-full" onClick={handlePlayPrev} disabled={downloads.length === 0} title="Previous">
-                    <Icons.SkipBack className="size-4" />
+                    <Icons.SkipBack className="size-5" />
                   </Button>
-                  <Button variant="outline" size="icon" className="size-9 rounded-full bg-primary text-primary-foreground border-0 shadow-md hover:scale-105 hover:bg-[#1db954] transition-transform flex items-center justify-center" onClick={() => currentTrack && setIsPlaying(!isPlaying)} disabled={!currentTrack}>
+                  <Button variant="outline" size="icon" className="size-11 rounded-full bg-primary text-primary-foreground border-0 shadow-lg hover:scale-110 hover:bg-[#1db954] transition-transform flex items-center justify-center" onClick={() => currentTrack && setIsPlaying(!isPlaying)} disabled={!currentTrack}>
                     <span className="t-icon-swap" data-state={isPlaying ? 'a' : 'b'}>
                       <span className="t-icon" data-icon="a">
-                        <Icons.Pause className="size-4" />
+                        <Icons.Pause className="size-5" />
                       </span>
                       <span className="t-icon" data-icon="b">
-                        <Icons.Play className="size-4 translate-x-0.5" />
+                        <Icons.Play className="size-5 translate-x-0.5" />
                       </span>
                     </span>
                   </Button>
                   <Button variant="ghost" size="icon" className="hover:bg-white/10 rounded-full" onClick={handlePlayNext} disabled={downloads.length === 0} title="Next">
-                    <Icons.SkipForward className="size-4" />
+                    <Icons.SkipForward className="size-5" />
                   </Button>
                 </div>
                 <div className="hidden sm:flex items-center gap-2 w-full max-w-md">
-                  <span ref={timeTextRef} className="text-[10px] font-medium text-muted-foreground w-8 text-right tabular-nums">0:00</span>
+                  <span ref={timeTextRef} className="text-[11px] font-medium text-muted-foreground w-10 text-right tabular-nums">0:00</span>
                   <input 
                     ref={sliderRef}
                     type="range" 
@@ -241,15 +244,15 @@ export default function Layout() {
                       if (audioRef.current) audioRef.current.currentTime = e.target.value;
                     }}
                   />
-                  <span className="text-[10px] font-medium text-muted-foreground w-8 tabular-nums">{formatTime(duration)}</span>
+                  <span className="text-[11px] font-medium text-muted-foreground w-10 tabular-nums">{formatTime(duration)}</span>
                 </div>
               </div>
 
-              <div className="hidden md:flex items-center gap-2 justify-end">
+              <div className="hidden md:flex items-center gap-2 justify-end w-20">
                 <Icons.Volume className="size-4 text-muted-foreground" />
                 <input 
                   type="range" 
-                  className="w-20 h-1.5 cursor-pointer appearance-none rounded-full bg-secondary/50 accent-primary backdrop-blur-sm" 
+                  className="w-full h-1.5 cursor-pointer appearance-none rounded-full bg-secondary/50 accent-primary backdrop-blur-sm" 
                   min="0" 
                   max="1" 
                   step="0.01" 
@@ -264,3 +267,4 @@ export default function Layout() {
     </>
   );
 }
+
