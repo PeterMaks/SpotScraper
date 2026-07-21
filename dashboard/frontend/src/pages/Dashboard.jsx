@@ -96,7 +96,7 @@ function NumberPopIn({ value }) {
 
   const str = String(value ?? '');
   return (
-    <span className={`t-digit-group ${isAnimating ? 'is-animating' : ''}`}>
+    <span className="inline-flex flex-nowrap whitespace-nowrap t-number-pop">
       {str.split('').map((ch, i) => {
         const stagger = i === str.length - 2 ? "1" : i === str.length - 1 ? "2" : undefined;
         return <span key={i} className="t-digit" data-stagger={stagger}>{ch}</span>;
@@ -107,7 +107,7 @@ function NumberPopIn({ value }) {
 
 function StatCard({ label, value, unit, accent, footnote }) {
   return (
-    <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)] transition-all duration-300 hover:shadow-[0_8px_40px_rgba(0,0,0,0.12)] hover:scale-[1.02]">
+    <Card className="backdrop-blur-xl bg-card shadow-[0_8px_24px_rgba(0,0,0,0.5)] transition-all duration-300 hover:shadow-[0_8px_40px_rgba(0,0,0,0.12)] hover:scale-[1.02]">
       <CardHeader className="pb-1">
         <CardDescription className="text-xs font-medium">{label}</CardDescription>
       </CardHeader>
@@ -129,7 +129,7 @@ const TOGGLE_VIEWS = [
 
 function PlatformToggle({ view, setView }) {
   return (
-    <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 backdrop-blur-sm border border-white/10">
+    <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 backdrop-blur-sm">
       {TOGGLE_VIEWS.map(({ key, label }) => (
         <button
           key={key}
@@ -221,7 +221,7 @@ export default function Dashboard() {
           <h2 className="text-3xl font-bold tracking-tight">Recaps &amp; Insights</h2>
           <p className="text-muted-foreground mt-1">Listening stats · {platformLabel}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <PlatformToggle view={platformView} setView={setPlatformView} />
           <Button variant="secondary" onClick={() => { fetchStats(); fetchAppleStats(); }} disabled={isLoading}>
             Refresh
@@ -231,7 +231,7 @@ export default function Dashboard() {
 
       {/* Upload Cards */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
+        <Card className="backdrop-blur-xl bg-card shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
           <CardHeader>
             <CardTitle>Spotify Data</CardTitle>
             <CardDescription>StreamingHistory*.json, Playlist*.json, .csv / .xlsx</CardDescription>
@@ -252,7 +252,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
+        <Card className="backdrop-blur-xl bg-card shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
           <CardHeader>
             <CardTitle>Apple Music Data</CardTitle>
             <CardDescription>Apple Music - Play History Daily Tracks .csv</CardDescription>
@@ -284,8 +284,8 @@ export default function Dashboard() {
           {/* Stat Cards */}
           <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
             <StatCard label="Total Listening" value={selectedStats.totalHours} unit="Hrs" />
-            <StatCard label="Music Playtime" value={selectedStats.totalMusicHours} unit="Hrs" accent="text-purple-500" />
-            <StatCard label="Podcast Playtime" value={selectedStats.totalPodcastHours} unit="Hrs" accent="text-blue-500" />
+            <StatCard label="Music Playtime" value={selectedStats.totalMusicHours} unit="Hrs" accent="text-green-500" />
+            <StatCard label="Podcast Playtime" value={selectedStats.totalPodcastHours} unit="Hrs" accent="text-emerald-400" />
             <StatCard
               label="Unique Artists"
               value={selectedStats.uniqueArtists}
@@ -308,7 +308,7 @@ export default function Dashboard() {
           {/* Day of Week + Genres */}
           <div className="grid gap-4 grid-cols-1 lg:grid-cols-4">
             <DayOfWeekChart data={selectedStats.listeningByDay || []} />
-            <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)] col-span-1 md:col-span-2">
+            <Card className="backdrop-blur-xl bg-card shadow-[0_8px_24px_rgba(0,0,0,0.5)] col-span-1 md:col-span-2">
               <CardHeader>
                 <CardTitle>Top Genres</CardTitle>
                 <CardDescription>By total listening hours</CardDescription>
@@ -340,7 +340,7 @@ export default function Dashboard() {
 
           {/* Top Artists + Tracks */}
           <div className="grid gap-6 md:grid-cols-2">
-            <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
+            <Card className="backdrop-blur-xl bg-card shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
               <CardHeader>
                 <CardTitle>Top Artists</CardTitle>
                 <CardDescription>Top 20</CardDescription>
@@ -364,7 +364,7 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
+            <Card className="backdrop-blur-xl bg-card shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
               <CardHeader>
                 <CardTitle>Top Tracks</CardTitle>
                 <CardDescription>Top 20</CardDescription>
@@ -403,7 +403,7 @@ export default function Dashboard() {
           {/* Top Albums + Podcasts */}
           <div className="grid gap-6 md:grid-cols-2">
             {(selectedStats.topAlbums || []).length > 0 && (
-              <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
+              <Card className="backdrop-blur-xl bg-card shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
                 <CardHeader>
                   <CardTitle>Top Albums</CardTitle>
                   <CardDescription>By Playtime</CardDescription>
@@ -426,7 +426,7 @@ export default function Dashboard() {
             )}
 
             {(selectedStats.topPodcasts || []).length > 0 && (
-              <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
+              <Card className="backdrop-blur-xl bg-card shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
                 <CardHeader>
                   <CardTitle>Top Podcasts</CardTitle>
                   <CardDescription>By Playtime</CardDescription>
@@ -435,7 +435,7 @@ export default function Dashboard() {
                   {selectedStats.topPodcasts.map((podcast, idx) => {
                     const pct = (podcast.hours / (selectedStats.topPodcasts[0]?.hours || 1)) * 100;
                     return (
-                      <div key={podcast.name} className="flex flex-col gap-1.5 p-3 rounded-lg border border-white/10 bg-card/30 backdrop-blur-md">
+                      <div key={podcast.name} className="flex flex-col gap-1.5 p-3 rounded-lg bg-card/50 backdrop-blur-md">
                         <div className="flex justify-between items-center text-sm">
                           <span className="font-medium truncate pr-2">{idx + 1}. {podcast.name}</span>
                           <span className="text-muted-foreground shrink-0">{podcast.hours} hrs</span>

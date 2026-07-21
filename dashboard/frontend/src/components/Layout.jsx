@@ -61,10 +61,10 @@ export default function Layout() {
 
   return (
     <>
-      {/* Super High Glassmorphism Background layer */}
-      <div className="fixed inset-0 z-[-1] bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-pink-500/10 dark:from-blue-900/30 dark:via-purple-900/30 dark:to-pink-900/30">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-blue-500/30 blur-[120px] mix-blend-screen pointer-events-none" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-purple-500/30 blur-[120px] mix-blend-screen pointer-events-none" />
+      {/* Spotify-inspired ambient background */}
+      <div className="fixed inset-0 z-[-1] bg-gradient-to-br from-green-500/5 via-emerald-500/5 to-teal-500/5 dark:from-green-900/20 dark:via-emerald-950/20 dark:to-black/0">
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-green-500/15 dark:bg-green-500/10 blur-[120px] mix-blend-screen pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-500/15 dark:bg-emerald-500/8 blur-[120px] mix-blend-screen pointer-events-none" />
       </div>
 
       <TooltipProvider delayDuration={0}>
@@ -73,7 +73,7 @@ export default function Layout() {
             <SidebarHeader>
               <div className="flex items-center justify-between p-2">
                 <div className="flex items-center gap-2">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold shrink-0 shadow-lg shadow-primary/20">
+                  <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold shrink-0 shadow-lg shadow-green-500/20">
                     S
                   </div>
                   <span className="font-semibold text-lg truncate group-data-[collapsible=icon]:hidden drop-shadow-sm">SpotScraper</span>
@@ -155,7 +155,7 @@ export default function Layout() {
           </Sidebar>
 
           {/* Main Content Area */}
-          <main className="flex-1 flex flex-col relative min-h-screen overflow-hidden bg-background/20 backdrop-blur-3xl m-2 rounded-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.1)]">
+          <main className="flex-1 min-w-0 flex flex-col relative min-h-screen overflow-hidden bg-background/20 backdrop-blur-3xl m-2 rounded-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.1)]">
             {/* Mobile-only floating trigger since sidebar hides completely on mobile */}
             <div className="absolute top-4 left-4 z-50 md:hidden flex items-center gap-2">
               <SidebarTrigger className="bg-background/50 backdrop-blur-md border border-white/10 shadow-sm" />
@@ -187,7 +187,7 @@ export default function Layout() {
 
           {currentTrack && (
             <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl rounded-2xl border border-white/20 bg-background/80 backdrop-blur-3xl shadow-[0_8px_32px_rgba(0,0,0,0.25)] p-3 flex items-center justify-between gap-4 z-[100] transition-all duration-500 ${isPlaying ? 'translate-y-0 opacity-100' : 'translate-y-0 opacity-100'}`}>
-              <div className="flex items-center gap-3 w-1/3 min-w-[180px]">
+              <div className="flex items-center gap-3 shrink min-w-0 flex-1">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-secondary text-secondary-foreground shadow-inner border border-white/10 overflow-hidden relative">
                   <img 
                     key={currentTrack.name}
@@ -209,12 +209,12 @@ export default function Layout() {
                 </div>
               </div>
               
-              <div className="flex flex-col items-center gap-1 w-1/3 flex-1">
+              <div className="flex flex-col items-center gap-1 shrink-0">
                 <div className="flex items-center gap-2">
                   <Button variant="ghost" size="icon" className="hover:bg-white/10 rounded-full" onClick={handlePlayPrev} disabled={downloads.length === 0} title="Previous">
                     <Icons.SkipBack className="size-4" />
                   </Button>
-                  <Button variant="outline" size="icon" className="size-9 rounded-full bg-background/50 backdrop-blur-md border-white/20 shadow-md hover:bg-white/20 flex items-center justify-center" onClick={() => currentTrack && setIsPlaying(!isPlaying)} disabled={!currentTrack}>
+                  <Button variant="outline" size="icon" className="size-9 rounded-full bg-primary text-primary-foreground border-0 shadow-md hover:scale-105 hover:bg-[#1db954] transition-transform flex items-center justify-center" onClick={() => currentTrack && setIsPlaying(!isPlaying)} disabled={!currentTrack}>
                     <span className="t-icon-swap" data-state={isPlaying ? 'a' : 'b'}>
                       <span className="t-icon" data-icon="a">
                         <Icons.Pause className="size-4" />
@@ -228,7 +228,7 @@ export default function Layout() {
                     <Icons.SkipForward className="size-4" />
                   </Button>
                 </div>
-                <div className="flex items-center gap-2 w-full max-w-md">
+                <div className="hidden sm:flex items-center gap-2 w-full max-w-md">
                   <span ref={timeTextRef} className="text-[10px] font-medium text-muted-foreground w-8 text-right tabular-nums">0:00</span>
                   <input 
                     ref={sliderRef}
@@ -245,7 +245,7 @@ export default function Layout() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 w-1/3 justify-end min-w-[120px]">
+              <div className="hidden md:flex items-center gap-2 justify-end">
                 <Icons.Volume className="size-4 text-muted-foreground" />
                 <input 
                   type="range" 

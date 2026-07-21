@@ -23,8 +23,8 @@ export default function AcquireDataGuide() {
   return (
     <div className="flex flex-col items-center py-10 px-6 w-full animate-in fade-in duration-500">
       <header className="text-center mb-16 max-w-3xl">
-        <div className="inline-flex items-center gap-3 mb-8 px-6 py-3 bg-secondary/50 border rounded-2xl shadow-sm">
-          <div className="flex size-8 rounded-lg bg-gradient-to-br from-primary to-blue-500 items-center justify-center text-white">
+        <div className="inline-flex items-center gap-3 mb-8 px-6 py-3 bg-secondary/50 rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+          <div className="flex size-8 rounded-lg bg-gradient-to-br from-primary to-emerald-500 items-center justify-center text-white">
             <DatabaseZap size={20} />
           </div>
           <span className="text-2xl font-extrabold tracking-tight">SpotScraper</span>
@@ -35,7 +35,7 @@ export default function AcquireDataGuide() {
         </p>
       </header>
 
-      <div className="flex relative bg-secondary/50 p-1.5 rounded-full mb-12 border w-full max-w-md mx-auto">
+      <div className="flex relative bg-secondary/50 p-1.5 rounded-full mb-12 w-full max-w-md mx-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
         <Button 
           variant={activeTab === 'full' ? 'default' : 'ghost'} 
           className="flex-1 rounded-full text-sm font-semibold h-10"
@@ -54,7 +54,7 @@ export default function AcquireDataGuide() {
 
       <div className="w-full max-w-4xl mx-auto">
         {activeTab === 'full' && (
-          <Card className="p-8 border bg-card">
+          <Card className="p-8 bg-card shadow-[0_8px_24px_rgba(0,0,0,0.5)] border-0">
             <div className="flex items-center gap-4 mb-8">
               <div className="flex size-12 rounded-xl bg-primary/15 items-center justify-center text-primary">
                 <FileJson size={24} />
@@ -73,8 +73,8 @@ export default function AcquireDataGuide() {
 
             <div className="grid gap-4 mb-12">
               {steps.map((step, idx) => (
-                <div key={idx} className="flex items-start gap-4 p-5 bg-secondary/30 rounded-2xl border">
-                  <div className="text-muted-foreground bg-background p-2.5 rounded-xl border">
+                <div key={idx} className="flex items-start gap-4 p-5 bg-secondary/30 rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+                  <div className="text-muted-foreground bg-background p-2.5 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
                     {step.icon}
                   </div>
                   <p className="text-base pt-2">{step.text}</p>
@@ -82,7 +82,7 @@ export default function AcquireDataGuide() {
               ))}
             </div>
 
-            <div className="p-6 rounded-2xl bg-primary/5 border border-primary/20 flex gap-5">
+            <div className="p-6 rounded-2xl bg-[#1ed760]/5 flex gap-5 shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
               <div className="text-primary pt-1">
                 <Info size={24} />
               </div>
@@ -97,9 +97,9 @@ export default function AcquireDataGuide() {
         )}
 
         {activeTab === 'playlists' && (
-          <Card className="p-8 border bg-card text-center flex flex-col items-center">
+          <Card className="p-8 bg-card shadow-[0_8px_24px_rgba(0,0,0,0.5)] text-center flex flex-col items-center border-0">
             <div className="flex items-center gap-4 mb-8 self-start text-left w-full">
-              <div className="flex size-12 rounded-xl bg-purple-500/15 items-center justify-center text-purple-500">
+              <div className="flex size-12 rounded-xl bg-green-500/15 items-center justify-center text-green-500">
                 <Music size={24} />
               </div>
               <div>
@@ -112,8 +112,8 @@ export default function AcquireDataGuide() {
               If you only need your playlists and don't want to wait 30 days for Spotify's full archive, <strong>Exportify</strong> is a secure third-party tool that connects to the Spotify API and instantly generates CSV files of your playlists.
             </p>
 
-            <div className="flex flex-col items-center gap-8 p-12 bg-secondary/30 rounded-3xl border w-full">
-              <div className="flex size-20 rounded-3xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 border items-center justify-center text-foreground shadow-lg">
+            <div className="flex flex-col items-center gap-8 p-12 bg-secondary/30 rounded-3xl w-full shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+              <div className="flex size-20 rounded-3xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 items-center justify-center text-foreground shadow-lg">
                 <ExternalLink size={32} />
               </div>
               

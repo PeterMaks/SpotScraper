@@ -14,74 +14,72 @@
   }
 
   :root {
+    /* Light theme — warm white surfaces, Spotify Green accent */
     --background: oklch(0.98 0 0 / 0%);
-    /* Transparent to show the fancy bg */
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0 / 40%);
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0 / 75%);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
+    --primary: #1ed760;
+    --primary-foreground: #000000;
     --secondary: oklch(0.97 0 0 / 50%);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0 / 50%);
     --muted-foreground: oklch(0.556 0 0);
     --accent: oklch(0.97 0 0 / 50%);
     --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0 / 30%);
-    --input: oklch(0.922 0 0 / 30%);
-    --ring: oklch(0.708 0 0 / 50%);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
+    --destructive: #f3727f;
+    --border: transparent;
+    --input: transparent;
+    --ring: #1ed760;
+    --chart-1: #1ed760;
+    --chart-2: #1db954;
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
-    --radius: 1rem;
+    --radius: 0.5rem;
     --sidebar: oklch(1 0 0 / 30%);
     --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-primary: #1ed760;
+    --sidebar-primary-foreground: #000000;
     --sidebar-accent: oklch(0.97 0 0 / 50%);
     --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0 / 20%);
-    --sidebar-ring: oklch(0.708 0 0 / 50%);
+    --sidebar-border: transparent;
   }
 
   .dark {
-    --background: oklch(0.05 0 0 / 0%);
-    /* Transparent */
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0 0 0 / 40%);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.12 0 0 / 75%);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0 / 50%);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0 / 50%);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0 / 50%);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 15%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0 / 50%);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0 0 0 / 30%);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0 / 50%);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 15%);
-    --sidebar-ring: oklch(0.556 0 0 / 50%);
+    /* Spotify dark theme — #121212 base, #181818 surfaces, #1ed760 accent */
+    --background: #121212;
+    --foreground: #ffffff;
+    --card: #181818;
+    --card-foreground: #ffffff;
+    --popover: #252525;
+    --popover-foreground: #ffffff;
+    --primary: #1ed760;
+    --primary-foreground: #000000;
+    --secondary: #1f1f1f;
+    --secondary-foreground: #ffffff;
+    --muted: #272727;
+    --muted-foreground: #b3b3b3;
+    --accent: #1f1f1f;
+    --accent-foreground: #ffffff;
+    --destructive: #f3727f;
+    --border: transparent;
+    --input: transparent;
+    --ring: #1ed760;
+    --chart-1: #1ed760;
+    --chart-2: #1db954;
+    --chart-3: #539df5;
+    --chart-4: #ffa42b;
+    --chart-5: #f3727f;
+    --sidebar: #121212;
+    --sidebar-foreground: #ffffff;
+    --sidebar-primary: #1ed760;
+    --sidebar-primary-foreground: #000000;
+    --sidebar-accent: #1f1f1f;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: transparent;
   }
 
   * {
@@ -95,7 +93,7 @@
   }
 
   .dark body {
-    background-color: #0f172a;
+    background-color: #121212;
   }
 
   html {

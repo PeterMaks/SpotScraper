@@ -204,12 +204,12 @@ export default function ScraperControl() {
               
               <div className="space-y-3">
                 <label className="text-sm font-medium">Download Quality</label>
-                <ToggleGroup type="single" value={scraperType} onValueChange={(val) => val && setScraperType(val)} disabled={isRunning} className="justify-start">
-                  <ToggleGroupItem value="api" aria-label="Fast · 192kbps" className="flex-1 py-6 h-auto flex flex-col gap-1 items-start border border-white/10 rounded-lg bg-card/20 backdrop-blur-sm transition-all duration-300 data-[state=on]:bg-[oklch(0.488_0.243_264.376_/_0.15)] data-[state=on]:border-[oklch(0.488_0.243_264.376_/_0.5)] data-[state=on]:shadow-[0_0_20px_oklch(0.488_0.243_264.376_/_0.2)] data-[state=on]:scale-[1.02] data-[state=off]:opacity-50 data-[state=off]:hover:opacity-80 data-[state=off]:hover:bg-card/30">
+                <ToggleGroup type="single" value={scraperType} onValueChange={(val) => val && setScraperType(val)} disabled={isRunning} className="justify-start flex-col sm:flex-row w-full">
+                  <ToggleGroupItem value="api" aria-label="Fast · 192kbps" className="flex-1 py-6 h-auto flex flex-col gap-1 items-start rounded-lg bg-card/20 backdrop-blur-sm transition-all duration-300 data-[state=on]:bg-[#1ed760]/15 data-[state=on]:border-[#1ed760]/50 data-[state=on]:shadow-[0_0_20px_rgba(30,215,96,0.2)] data-[state=on]:scale-[1.02] data-[state=off]:opacity-50 data-[state=off]:hover:opacity-80 data-[state=off]:hover:bg-card/30">
                     <div className="flex items-center gap-2 font-semibold"><span className="text-lg">⚡</span> Fast · 192kbps</div>
                     <div className="text-xs text-muted-foreground font-normal">Quick track downloads</div>
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="selenium" aria-label="HQ · 320kbps" className="flex-1 py-6 h-auto flex flex-col gap-1 items-start border border-white/10 rounded-lg bg-card/20 backdrop-blur-sm transition-all duration-300 data-[state=on]:bg-[oklch(0.488_0.243_264.376_/_0.15)] data-[state=on]:border-[oklch(0.488_0.243_264.376_/_0.5)] data-[state=on]:shadow-[0_0_20px_oklch(0.488_0.243_264.376_/_0.2)] data-[state=on]:scale-[1.02] data-[state=off]:opacity-50 data-[state=off]:hover:opacity-80 data-[state=off]:hover:bg-card/30">
+                  <ToggleGroupItem value="selenium" aria-label="HQ · 320kbps" className="flex-1 py-6 h-auto flex flex-col gap-1 items-start rounded-lg bg-card/20 backdrop-blur-sm transition-all duration-300 data-[state=on]:bg-[#1ed760]/15 data-[state=on]:border-[#1ed760]/50 data-[state=on]:shadow-[0_0_20px_rgba(30,215,96,0.2)] data-[state=on]:scale-[1.02] data-[state=off]:opacity-50 data-[state=off]:hover:opacity-80 data-[state=off]:hover:bg-card/30">
                     <div className="flex items-center gap-2 font-semibold"><span className="text-lg">◆</span> HQ · 320kbps</div>
                     <div className="text-xs text-muted-foreground font-normal">Album-quality audio</div>
                   </ToggleGroupItem>
@@ -252,7 +252,7 @@ export default function ScraperControl() {
                 </div>
               </div>
 
-              <div className="mt-auto pt-4 border-t flex">
+              <div className="mt-auto pt-4 flex">
                 {isRunning ? (
                   <Button type="button" variant="destructive" className="w-full" onClick={handleStopScrape}>
                     <svg className="mr-2 size-4" viewBox="0 0 14 14" fill="currentColor"><rect x="2" y="2" width="10" height="10" rx="2"/></svg>
@@ -270,7 +270,7 @@ export default function ScraperControl() {
         </Card>
 
         {/* Progress Panel */}
-        <Card className={`lg:col-span-7 flex flex-col overflow-hidden transition-colors ${isRunning ? 'border-primary/50' : isDone ? 'border-green-500/50' : isError ? 'border-red-500/50' : ''}`}>
+        <Card className={`lg:col-span-7 flex flex-col overflow-hidden transition-colors shadow-[0_8px_24px_rgba(0,0,0,0.5)] ${isRunning ? 'ring-1 ring-primary/50' : isDone ? 'ring-1 ring-green-500/50' : isError ? 'ring-1 ring-red-500/50' : ''}`}>
           <CardContent className="p-0 flex-1 flex flex-col">
             {(isRunning || hasOutput) ? (
               <div className="flex flex-col h-full">
@@ -304,7 +304,7 @@ export default function ScraperControl() {
                 </div>
 
                 {/* Footer / Terminal Toggle */}
-                <div className="p-4 bg-muted/30 border-b flex items-center justify-between">
+                <div className="p-4 bg-muted/30 flex items-center justify-between">
                   <span className="text-sm font-medium">{overallProgress.toFixed(1)}% complete</span>
                   <Button variant="ghost" size="sm" onClick={() => setShowTerminal(!showTerminal)} className="h-8">
                     {showTerminal ? 'Hide' : 'Show'} Raw Logs
@@ -315,7 +315,7 @@ export default function ScraperControl() {
                 </div>
 
                 {/* Terminal */}
-                <div className={`bg-black/80 backdrop-blur-xl text-zinc-50 font-mono text-xs flex flex-col shadow-inner t-resize-height overflow-y-auto custom-scrollbar ${showTerminal ? 'max-h-[300px] p-4 border-t border-white/10' : 'max-h-0 p-0 border-t-0 border-transparent'}`}>
+                <div className={`bg-black/80 backdrop-blur-xl text-zinc-50 font-mono text-xs flex flex-col shadow-[0_8px_24px_rgba(0,0,0,0.5)] t-resize-height overflow-y-auto custom-scrollbar ${showTerminal ? 'max-h-[300px] p-4' : 'max-h-0 p-0 border-transparent'}`}>
                   <div className="flex items-center gap-1.5 mb-3 sticky top-0 bg-black/80 backdrop-blur-md pb-2 z-10 rounded-b-lg -mx-2 px-2 -mt-2 pt-2">
                     <span className="size-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
                     <span className="size-2.5 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)]" />
@@ -330,7 +330,7 @@ export default function ScraperControl() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center flex-1 p-12 text-center text-muted-foreground">
-                <div className="size-20 mb-6 rounded-full border border-dashed border-muted flex items-center justify-center bg-muted/20">
+                <div className="size-20 mb-6 rounded-full flex items-center justify-center bg-muted/20">
                   <Icons.Scraper className="size-8 opacity-50" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Ready to download</h3>

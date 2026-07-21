@@ -216,7 +216,7 @@ export default function Downloads() {
       </div>
 
       <Card>
-        <div className="rounded-md border">
+        <div className="rounded-md">
           <Table>
             <TableHeader>
               <TableRow>
@@ -341,7 +341,7 @@ export default function Downloads() {
       </Card>
 
       {selectedFiles.size > 0 && createPortal(
-        <div className={`fixed ${currentTrack ? 'bottom-24' : 'bottom-6'} left-1/2 -translate-x-1/2 w-[90%] max-w-2xl rounded-2xl border border-white/20 bg-background/80 backdrop-blur-3xl shadow-[0_8px_32px_rgba(0,0,0,0.25)] px-6 py-3 flex items-center justify-between gap-4 z-[110] animate-in slide-in-from-bottom-10 fade-in duration-300 transition-[bottom] duration-300`}>
+        <div className={`fixed ${currentTrack ? 'bottom-24' : 'bottom-6'} left-1/2 -translate-x-1/2 w-[90%] max-w-2xl rounded-2xl bg-background/80 backdrop-blur-3xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] px-6 py-3 flex items-center justify-between gap-4 z-[110] animate-in slide-in-from-bottom-10 fade-in duration-300 transition-[bottom] duration-300`}>
           <span className="text-primary font-medium">{selectedFiles.size} items selected</span>
           <div className="flex items-center gap-2">
             <Button onClick={handleBatchDownload} className="rounded-full h-9">

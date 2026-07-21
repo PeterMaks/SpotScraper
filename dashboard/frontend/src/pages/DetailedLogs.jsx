@@ -203,7 +203,7 @@ export default function DetailedLogs() {
       </div>
 
       <Card>
-        <div className="rounded-md border">
+        <div className="rounded-md">
           <Table>
             <TableHeader>
               <TableRow>
@@ -226,8 +226,8 @@ export default function DetailedLogs() {
               ) : (
                 filteredLogs.map((item, idx) => {
                   const isSelected = selectedLogs.has(item.query);
-                  const statusColors = { downloaded: "bg-green-500/10 text-green-500 border-green-500/20", ready_to_download: "bg-blue-500/10 text-blue-500 border-blue-500/20", not_found: "bg-red-500/10 text-red-500 border-red-500/20", error: "bg-red-500/10 text-red-500 border-red-500/20", api_error: "bg-red-500/10 text-red-500 border-red-500/20", timeout: "bg-red-500/10 text-red-500 border-red-500/20" };
-                  const colorClass = statusColors[item.status] || "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
+                  const statusColors = { downloaded: "bg-[#1ed760]/10 text-[#1ed760]", ready_to_download: "bg-blue-500/10 text-blue-500", not_found: "bg-[#f3727f]/10 text-[#f3727f]", error: "bg-[#f3727f]/10 text-[#f3727f]", api_error: "bg-[#f3727f]/10 text-[#f3727f]", timeout: "bg-[#f3727f]/10 text-[#f3727f]" };
+                  const colorClass = statusColors[item.status] || "bg-[#ffa42b]/10 text-[#ffa42b]";
                   return (
                     <TableRow key={idx} data-state={isSelected ? "selected" : undefined} className="cursor-pointer" onClick={(e) => { if (e.target.type !== 'checkbox') handleCheckboxClick(e, item.query, idx); }}>
                       <TableCell className="text-center" onClick={(e) => handleCheckboxClick(e, item.query, idx)}>
@@ -242,7 +242,7 @@ export default function DetailedLogs() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{item.source}</TableCell>
                       <TableCell>
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${colorClass}`}>{item.status.replace(/_/g, ' ').toUpperCase()}</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${colorClass}`}>{item.status.replace(/_/g, ' ').toUpperCase()}</span>
                       </TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground">{item.time}</TableCell>
                     </TableRow>
@@ -255,7 +255,7 @@ export default function DetailedLogs() {
       </Card>
 
       {selectedLogs.size > 0 && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-background border shadow-xl rounded-full px-6 py-3 flex items-center gap-6 z-40 animate-in slide-in-from-bottom-10 fade-in duration-300">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-background shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-full px-6 py-3 flex items-center gap-6 z-40 animate-in slide-in-from-bottom-10 fade-in duration-300">
           <span className="text-primary font-medium">{selectedLogs.size} logs selected</span>
           <div className="flex items-center gap-2">
             <Button variant="destructive" onClick={handleBatchDelete} className="rounded-full h-9"><Icons.Trash className="size-4 mr-2" /> Archive Selected</Button>

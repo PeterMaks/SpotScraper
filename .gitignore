@@ -88,3 +88,4 @@ __pycache__/
 .graphify_python
 .graphify_analysis.json
 .graphify_extract.json
+DESIGN.md
