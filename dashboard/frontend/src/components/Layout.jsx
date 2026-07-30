@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAppContext } from '../AppContext';
@@ -72,7 +73,7 @@ export default function Layout() {
         <SidebarProvider>
           <Sidebar variant="inset" collapsible="icon" className="backdrop-blur-2xl border-r border-white/20 dark:border-white/10">
             <SidebarHeader>
-              <div className="flex items-center justify-between p-2">
+              <div className="flex items-center justify-between p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0">
                 <div className="flex items-center gap-3">
                   <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold shrink-0 shadow-lg shadow-green-500/20 text-lg">
                     S
@@ -135,7 +136,7 @@ export default function Layout() {
             </SidebarContent>
 
             <SidebarFooter>
-              <div className="p-4 flex items-center gap-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2 bg-sidebar/50 rounded-xl m-2 border border-sidebar-border backdrop-blur-md">
+              <div className="p-4 flex items-center gap-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:m-1 bg-sidebar/50 rounded-xl m-2 border border-sidebar-border backdrop-blur-md">
                 <span className={`size-3 rounded-full shrink-0 ${scraperStatus === 'running' ? 'bg-blue-500 animate-pulse shadow-[0_0_10px_currentColor]' : scraperStatus === 'success' ? 'bg-green-500 shadow-[0_0_10px_currentColor]' : scraperStatus === 'error' ? 'bg-red-500 shadow-[0_0_10px_currentColor]' : 'bg-gray-500'}`}></span>
                 <span className="text-sm font-medium text-muted-foreground truncate group-data-[collapsible=icon]:hidden">
                   {scraperStatus === 'running' 

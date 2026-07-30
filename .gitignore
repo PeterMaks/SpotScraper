@@ -61,6 +61,11 @@ dashboard/backend/logs/
 # Agents / IDE / Editor
 # =========================
 .agents/
+.claude/
+.hermes/
+.openclaw/
+.zcode/
+.bob/
 skills-lock.json
 .vscode/
 .idea/

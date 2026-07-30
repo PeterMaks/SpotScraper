@@ -46,6 +46,15 @@ def save_cache(cache_dict):
     except Exception as e:
         print(f"Error saving cache: {e}")
 
+def _post_log(url, payload):
+    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+    try:
+        urllib.request.urlopen(req, timeout=2)
+    except Exception as e:
+        print(f"Error emitting log: {e}")
+
+# ponytail: derive scrapeLog status string from downloadLinks data inside emit_log
+# so every call site gets both logs for free — no shotgun surgery across 10+ sites
 def emit_log(log_type, key, data):
     if isinstance(data, dict):
         data['source'] = 'api'
@@ -56,11 +65,25 @@ def emit_log(log_type, key, data):
         "key": key,
         "data": data
     }).encode('utf-8')
-    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
-    try:
-        urllib.request.urlopen(req, timeout=2)
-    except Exception as e:
-        print(f"Error emitting log: {e}")
+    _post_log(url, payload)
+
+    # Auto-emit companion scrapeLog entry for downloadLinks
+    if log_type == 'downloadLinks' and isinstance(data, dict):
+        status = data.get('status', 'unknown')
+        error = data.get('error', '')
+        status_map = {
+            'downloaded': 'Success',
+            'not_found': 'Failed: not found',
+            'skipped_mismatch': 'Skipped mismatch',
+            'error': f'Failed: {error}' if error else 'Failed',
+        }
+        scrape_status = status_map.get(status, status)
+        sl_payload = json.dumps({
+            "type": "scrapeLog",
+            "key": key,
+            "data": scrape_status
+        }).encode('utf-8')
+        _post_log(url, sl_payload)
 
 def build_dir_cache(downloads_dir="downloads"):
     return {
