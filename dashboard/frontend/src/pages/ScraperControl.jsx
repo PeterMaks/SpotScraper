@@ -255,12 +255,12 @@ export default function ScraperControl() {
 
               <div className="mt-auto pt-4 flex">
                 {isRunning ? (
-                  <Button type="button" variant="destructive" className="w-full h-12 text-base" onClick={handleStopScrape}>
+                  <Button type="button" variant="destructive" className="press-scale w-full h-12 text-base" onClick={handleStopScrape}>
                     <svg className="mr-2 size-4" viewBox="0 0 14 14" fill="currentColor"><rect x="2" y="2" width="10" height="10" rx="2"/></svg>
                     Stop Download
                   </Button>
                 ) : (
-                  <Button type="submit" className="w-full h-12 text-base bg-primary hover:bg-primary/90 text-primary-foreground">
+                  <Button type="submit" className="press-scale w-full h-12 text-base bg-primary hover:bg-primary/90 text-primary-foreground">
                     <svg className="mr-2 size-4" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l10-5.5z"/></svg>
                     Start Download
                   </Button>
@@ -297,8 +297,11 @@ export default function ScraperControl() {
                 {/* Progress bar */}
                 <div className="h-2 w-full bg-muted relative overflow-hidden">
                   <div 
-                    className={`absolute inset-y-0 left-0 transition-all duration-300 ease-out ${isError ? 'bg-destructive' : isDone ? 'bg-green-500' : 'bg-primary'}`} 
-                    style={{ width: `${overallProgress}%` }}
+                    className={`absolute inset-y-0 left-0 ${isError ? 'bg-destructive' : isDone ? 'bg-green-500' : 'bg-primary'}`} 
+                    style={{ 
+                      width: `${overallProgress}%`,
+                      transition: 'width 300ms cubic-bezier(0.23,1,0.32,1)',
+                    }}
                   >
                     {isRunning && <div className="absolute inset-0 bg-white/20 animate-[pulse_2s_ease-in-out_infinite]" />}
                   </div>
@@ -307,7 +310,7 @@ export default function ScraperControl() {
                 {/* Footer / Terminal Toggle */}
                 <div className="p-4 bg-muted/30 flex items-center justify-between">
                   <span className="text-sm font-bold">{overallProgress.toFixed(1)}% complete</span>
-                  <Button variant="ghost" size="sm" onClick={() => setShowTerminal(!showTerminal)} className="h-9">
+                  <Button variant="ghost" size="sm" onClick={() => setShowTerminal(!showTerminal)} className="press-scale h-9">
                     {showTerminal ? 'Hide' : 'Show'} Raw Logs
                     <svg className={`ml-2 size-3 transition-transform ${showTerminal ? 'rotate-180' : ''}`} viewBox="0 0 10 10" fill="none">
                       <path d="M2.5 3.5L5 6.5L7.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>

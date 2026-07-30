@@ -108,7 +108,23 @@ function NumberPopIn({ value }) {
 
 function StatCard({ label, value, unit, accent, footnote }) {
   return (
-    <Card className="backdrop-blur-xl bg-card/40 border border-white/10 shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 p-6">
+    <Card
+      className="backdrop-blur-xl bg-card/40 border border-white/10 shadow-sm p-6 cursor-default"
+      style={{
+        transition:
+          'transform 200ms cubic-bezier(0.23,1,0.32,1), box-shadow 200ms cubic-bezier(0.23,1,0.32,1)',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.boxShadow = '0 8px 32px rgba(30,215,96,0.12), 0 4px 12px rgba(0,0,0,0.15)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = '';
+        e.currentTarget.style.boxShadow = '';
+      }}
+      onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.98)'; }}
+      onMouseUp={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+    >
       <CardHeader className="pb-2">
         <CardDescription className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</CardDescription>
       </CardHeader>
@@ -128,19 +144,39 @@ const TOGGLE_VIEWS = [
   { key: 'apple',   label: 'Apple Music' },
 ];
 
+/**
+ * Sliding-pill tab strip — uses the .t-tabs / .t-tabs-pill CSS already defined
+ * in index.css. The indicator physically moves between options.
+ */
 function PlatformToggle({ view, setView }) {
+  const tabRefs = React.useRef([]);
+  const pillRef = React.useRef(null);
+
+  const movePill = React.useCallback((idx) => {
+    const tab = tabRefs.current[idx];
+    const pill = pillRef.current;
+    if (!tab || !pill) return;
+    pill.style.width = `${tab.offsetWidth}px`;
+    pill.style.transform = `translateX(${tab.offsetLeft}px)`;
+  }, []);
+
+  React.useLayoutEffect(() => {
+    const idx = TOGGLE_VIEWS.findIndex(v => v.key === view);
+    movePill(idx >= 0 ? idx : 0);
+  }, [view, movePill]);
+
   return (
-    <div className="flex items-center gap-1 p-1.5 rounded-xl bg-muted/60 backdrop-blur-sm border border-white/5">
-      {TOGGLE_VIEWS.map(({ key, label }) => (
+    <div className="t-tabs" role="tablist">
+      <div ref={pillRef} className="t-tabs-pill" />
+      {TOGGLE_VIEWS.map(({ key, label }, idx) => (
         <button
           key={key}
           id={`platform-toggle-${key}`}
+          ref={el => { tabRefs.current[idx] = el; }}
+          role="tab"
+          aria-selected={view === key}
           onClick={() => setView(key)}
-          className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-            view === key
-              ? 'bg-background shadow-md text-primary'
-              : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-          }`}
+          className="t-tab"
         >
           {label}
         </button>
@@ -277,29 +313,52 @@ export default function Dashboard() {
       </div>
 
       {isLoading ? (
-        <div className="text-center p-20 animate-pulse text-muted-foreground">
-          <svg className="mx-auto size-12 mb-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-          <p className="text-lg font-medium">Aggregating {platformLabel} stats...</p>
+        /* Shimmer skeleton that matches the real layout */
+        <div className="flex flex-col gap-8">
+          {/* Stat cards skeleton */}
+          <div className="grid gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="rounded-xl border border-white/10 p-6 flex flex-col gap-3">
+                <div className="skeleton-shimmer h-3 w-20 rounded" />
+                <div className="skeleton-shimmer h-8 w-16 rounded" />
+                <div className="skeleton-shimmer h-3 w-12 rounded" />
+              </div>
+            ))}
+          </div>
+          {/* Chart area skeleton */}
+          <div className="grid gap-6 grid-cols-1 lg:grid-cols-4">
+            <div className="skeleton-shimmer h-64 rounded-xl col-span-1 lg:col-span-3" />
+            <div className="skeleton-shimmer h-64 rounded-xl" />
+          </div>
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="skeleton-shimmer h-48 rounded-xl" />
+            <div className="skeleton-shimmer h-48 rounded-xl" />
+          </div>
+          <p className="text-center text-sm text-muted-foreground mt-2">Aggregating {platformLabel} stats&hellip;</p>
         </div>
       ) : selectedStats ? (
         <div className="flex flex-col gap-8">
 
-          {/* Stat Cards */}
+          {/* Stat Cards — stagger in on mount */}
           <div className="grid gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-            <StatCard label="Total Listening" value={selectedStats.totalHours} unit="Hrs" />
-            <StatCard label="Music Playtime" value={selectedStats.totalMusicHours} unit="Hrs" accent="text-green-500" />
-            <StatCard label="Podcast Playtime" value={selectedStats.totalPodcastHours} unit="Hrs" accent="text-emerald-400" />
-            <StatCard
-              label="Unique Artists"
-              value={selectedStats.uniqueArtists}
-              footnote={selectedStats.uniqueTracks ? `${selectedStats.uniqueTracks} tracks` : undefined}
-            />
-            <StatCard
-              label="Listening Streak"
-              value={selectedStats.maxStreak || '—'}
-              unit={selectedStats.maxStreak ? 'days' : ''}
-              footnote={selectedStats.avgDailyHours ? `~${selectedStats.avgDailyHours}h/day avg` : undefined}
-            />
+            <div className="stagger-item"><StatCard label="Total Listening" value={selectedStats.totalHours} unit="Hrs" /></div>
+            <div className="stagger-item"><StatCard label="Music Playtime" value={selectedStats.totalMusicHours} unit="Hrs" accent="text-green-500" /></div>
+            <div className="stagger-item"><StatCard label="Podcast Playtime" value={selectedStats.totalPodcastHours} unit="Hrs" accent="text-emerald-400" /></div>
+            <div className="stagger-item">
+              <StatCard
+                label="Unique Artists"
+                value={selectedStats.uniqueArtists}
+                footnote={selectedStats.uniqueTracks ? `${selectedStats.uniqueTracks} tracks` : undefined}
+              />
+            </div>
+            <div className="stagger-item">
+              <StatCard
+                label="Listening Streak"
+                value={selectedStats.maxStreak || '—'}
+                unit={selectedStats.maxStreak ? 'days' : ''}
+                footnote={selectedStats.avgDailyHours ? `~${selectedStats.avgDailyHours}h/day avg` : undefined}
+              />
+            </div>
           </div>
 
           {/* Trend + Time of Day */}
@@ -320,7 +379,7 @@ export default function Dashboard() {
                 {(selectedStats.topGenres || []).slice(0, 10).map((genre, idx) => {
                   const pct = (genre.hours / ((selectedStats.topGenres || [])[0]?.hours || 1)) * 100;
                   return (
-                    <div key={genre.name} className="flex flex-col gap-1.5">
+                    <div key={genre.name} className="stagger-item flex flex-col gap-1.5">
                       <div className="flex justify-between items-center text-sm">
                         <span className="font-semibold truncate pr-4 capitalize flex items-center gap-2">
                           <Badge variant="secondary" className="text-[10px] tabular-nums py-0 px-1.5 rounded-md">{idx + 1}</Badge>
@@ -328,7 +387,7 @@ export default function Dashboard() {
                         </span>
                         <span className="text-muted-foreground shrink-0 tabular-nums font-medium">{genre.hours} hrs</span>
                       </div>
-                      <Progress value={pct} className="h-2" />
+                      <div className="progress-animate"><Progress value={pct} className="h-2" /></div>
                     </div>
                   );
                 })}
@@ -352,12 +411,12 @@ export default function Dashboard() {
                 {selectedStats.topArtists.slice(0, 10).map((artist, idx) => {
                   const pct = (artist.hours / (selectedStats.topArtists[0]?.hours || 1)) * 100;
                   return (
-                    <div key={artist.name} className="flex flex-col gap-2">
+                    <div key={artist.name} className="stagger-item flex flex-col gap-2">
                       <div className="flex justify-between items-center text-sm">
                         <span className="font-semibold truncate pr-4">{idx + 1}. {artist.name}</span>
                         <span className="text-muted-foreground shrink-0 font-medium">{artist.hours} hrs</span>
                       </div>
-                      <Progress value={pct} className="h-2" />
+                      <div className="progress-animate"><Progress value={pct} className="h-2" /></div>
                     </div>
                   );
                 })}
@@ -382,7 +441,7 @@ export default function Dashboard() {
                   </TableHeader>
                   <TableBody>
                     {selectedStats.topTracks.slice(0, 10).map((track, idx) => (
-                      <TableRow key={`${track.name}-${track.artist}`} className="border-white/5">
+                      <TableRow key={`${track.name}-${track.artist}`} className="stagger-item border-white/5">
                         <TableCell className="py-3">
                           <div className="font-semibold text-sm">{idx + 1}. {track.name}</div>
                           <div className="text-xs text-muted-foreground mt-1">{track.artist} • {track.album}</div>

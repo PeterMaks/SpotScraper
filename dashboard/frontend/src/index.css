@@ -112,6 +112,7 @@
   }
 
   .dark .custom-scrollbar,
+  .dark * {
     scrollbar-color: oklch(1 0 0 / 15%) transparent;
   }
 
@@ -165,6 +166,134 @@
 [data-collapsible="icon"] [data-slot="sidebar-footer"] {
   padding-inline: 0.25rem;
 }
+
+/* ==========================================
+   Sidebar — Design Engineering Overrides
+   ========================================== */
+
+/* 1. Collapse animation: use --ease-drawer (the drawer curve) instead
+      of shadcn's generic transition-all. Target the sidebar rail width
+      transition that drives the collapse/expand. */
+[data-slot="sidebar"] {
+  transition:
+    width 260ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 200ms cubic-bezier(0.23, 1, 0.32, 1) !important;
+}
+
+/* 2. Nav item hover: subtle 2px slide-right + fast ease-out.
+      Only on pointer-capable devices. */
+@media (hover: hover) and (pointer: fine) {
+  [data-slot="sidebar-menu-button"] {
+    transition:
+      background-color 150ms cubic-bezier(0.23, 1, 0.32, 1),
+      color            150ms cubic-bezier(0.23, 1, 0.32, 1),
+      transform        150ms cubic-bezier(0.23, 1, 0.32, 1) !important;
+  }
+
+  [data-slot="sidebar-menu-button"]:not([data-active="true"]):hover {
+    transform: translateX(2px) !important;
+  }
+}
+
+/* 3. Active item: green pill with glow — clear position signal. */
+[data-slot="sidebar-menu-button"][data-active="true"] {
+  background: rgba(30, 215, 96, 0.12) !important;
+  color: #1ed760 !important;
+  box-shadow: inset 0 0 0 1px rgba(30, 215, 96, 0.2) !important;
+  transform: none !important;
+}
+
+[data-slot="sidebar-menu-button"][data-active="true"]:hover {
+  background: rgba(30, 215, 96, 0.18) !important;
+}
+
+/* Active item icon inherits the green */
+[data-slot="sidebar-menu-button"][data-active="true"] svg {
+  color: #1ed760;
+}
+
+/* 4. Inactive items: muted text, dimmer icons — clear hierarchy. */
+[data-slot="sidebar-menu-button"]:not([data-active="true"]) {
+  color: oklch(0.65 0 0) !important;
+}
+
+.dark [data-slot="sidebar-menu-button"]:not([data-active="true"]) {
+  color: oklch(0.55 0 0) !important;
+}
+
+[data-slot="sidebar-menu-button"]:not([data-active="true"]):hover {
+  color: oklch(0.9 0 0) !important;
+}
+
+/* 5. Press feedback on nav items (they ARE pressable) */
+[data-slot="sidebar-menu-button"]:active {
+  transform: scale(0.97) translateX(0) !important;
+}
+
+/* 6. Status dot: smooth color+glow transition instead of keyframe pulse */
+.scraper-status-dot {
+  transition:
+    background-color 400ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow       400ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.scraper-status-dot[data-status="running"] {
+  background-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+.scraper-status-dot[data-status="success"] {
+  background-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+}
+
+.scraper-status-dot[data-status="error"] {
+  background-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+}
+
+.scraper-status-dot[data-status="idle"] {
+  background-color: oklch(0.5 0 0);
+  box-shadow: none;
+}
+
+/* 7. Logo tile: ambient glow halo */
+.sidebar-logo {
+  box-shadow:
+    0 4px 12px rgba(30, 215, 96, 0.3),
+    0 0 0 1px rgba(30, 215, 96, 0.15) inset;
+  transition: box-shadow 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-logo:hover {
+    box-shadow:
+      0 6px 20px rgba(30, 215, 96, 0.4),
+      0 0 0 1px rgba(30, 215, 96, 0.3) inset;
+  }
+}
+
+/* 8. Sidebar trigger (the collapse chevron button): rotate icon on state */
+.sidebar-trigger-chevron {
+  transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+
+.sidebar-trigger-chevron[data-collapsed="true"] {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="sidebar"],
+  [data-slot="sidebar-menu-button"],
+  .scraper-status-dot,
+  .sidebar-logo,
+  .sidebar-trigger-chevron {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
 
 /* ==========================================
    Emil Design Eng — Global Motion Tokens

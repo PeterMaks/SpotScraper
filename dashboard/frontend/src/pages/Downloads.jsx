@@ -281,7 +281,7 @@ export default function Downloads() {
                     <TableRow 
                       key={file.name}
                       data-state={isSelected ? "selected" : undefined}
-                      className={`cursor-pointer group border-white/5 transition-colors ${isRowPlaying ? 'bg-primary/5' : isSelected ? 'bg-primary/5' : 'hover:bg-muted/30'}`}
+                      className={`stagger-item cursor-pointer group border-white/5 transition-colors ${isRowPlaying ? 'bg-primary/5' : isSelected ? 'bg-primary/5' : 'hover:bg-muted/30'}`}
                       onDoubleClick={() => handlePlayTrack(file)}
                       onClick={(e) => {
                         if (e.target.type === 'checkbox') return;
@@ -356,13 +356,13 @@ export default function Downloads() {
         <div className={`fixed ${currentTrack ? 'bottom-32' : 'bottom-6'} left-1/2 -translate-x-1/2 w-[90%] max-w-2xl rounded-2xl bg-background/90 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] px-6 py-4 flex items-center justify-between gap-4 z-[110] animate-in slide-in-from-bottom-10 fade-in duration-300 transition-[bottom] duration-300`}>
           <span className="text-primary font-bold text-lg">{selectedFiles.size} items selected</span>
           <div className="flex items-center gap-2">
-            <Button onClick={handleBatchDownload} className="rounded-xl h-10">
+            <Button onClick={handleBatchDownload} className="press-scale rounded-xl h-10">
               <Icons.Download className="size-4 mr-2" /> Save as ZIP
             </Button>
-            <Button variant="destructive" onClick={handleBatchDelete} className="rounded-xl h-10">
+            <Button variant="destructive" onClick={handleBatchDelete} className="press-scale rounded-xl h-10">
               <Icons.Trash className="size-4 mr-2" /> Delete
             </Button>
-            <Button variant="ghost" onClick={() => setSelectedFiles(new Set())} className="rounded-xl h-10">
+            <Button variant="ghost" onClick={() => setSelectedFiles(new Set())} className="press-scale rounded-xl h-10">
               Cancel
             </Button>
           </div>

@@ -36,13 +36,39 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
         </div>
         <div className="flex items-center gap-3">
           {isAllPlatforms && (
-            <label className="flex items-center gap-2 text-xs font-medium cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
-              <input
-                type="checkbox"
-                checked={splitPlatforms}
-                onChange={(e) => startTransition(() => setSplitPlatforms(e.target.checked))}
-                className="accent-primary rounded bg-transparent border-white/20 cursor-pointer"
-              />
+            <label
+              className="flex items-center gap-2 text-xs font-medium cursor-pointer text-muted-foreground hover:text-foreground transition-colors select-none"
+              title="Split by platform"
+            >
+              {/* Toggle switch */}
+              <span
+                role="checkbox"
+                aria-checked={splitPlatforms}
+                onClick={() => startTransition(() => setSplitPlatforms(p => !p))}
+                style={{
+                  display: 'inline-flex',
+                  width: 32,
+                  height: 18,
+                  borderRadius: 9999,
+                  background: splitPlatforms ? '#1ed760' : 'oklch(0.3 0 0 / 60%)',
+                  transition: 'background 200ms cubic-bezier(0.23,1,0.32,1)',
+                  position: 'relative',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{
+                  position: 'absolute',
+                  top: 2,
+                  left: splitPlatforms ? 16 : 2,
+                  width: 14,
+                  height: 14,
+                  borderRadius: '50%',
+                  background: '#fff',
+                  transition: 'left 200ms cubic-bezier(0.23,1,0.32,1)',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                }} />
+              </span>
               Split Platforms
             </label>
           )}
@@ -125,7 +151,6 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
               />
               {(!splitPlatforms || !isAllPlatforms) ? (
                 <Area
-                  isAnimationActive={false}
                   type="monotone"
                   dataKey="hours"
                   name="Total Hours"
@@ -134,11 +159,12 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
                   fill="url(#totalGradient)"
                   dot={false}
                   activeDot={{ r: 5, fill: 'oklch(0.65 0.2 280)', stroke: '#fff', strokeWidth: 2 }}
+                  animationDuration={800}
+                  animationEasing="ease-out"
                 />
               ) : (
                 <>
                   <Area
-                    isAnimationActive={false}
                     type="monotone"
                     dataKey="spotifyHours"
                     name="Spotify"
@@ -147,9 +173,10 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
                     fill="url(#spotifyGradient)"
                     dot={false}
                     activeDot={{ r: 5, fill: '#1DB954', stroke: '#fff', strokeWidth: 2 }}
+                    animationDuration={800}
+                    animationEasing="ease-out"
                   />
                   <Area
-                    isAnimationActive={false}
                     type="monotone"
                     dataKey="appleHours"
                     name="Apple Music"
@@ -158,6 +185,8 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
                     fill="url(#appleGradient)"
                     dot={false}
                     activeDot={{ r: 5, fill: '#FA243C', stroke: '#fff', strokeWidth: 2 }}
+                    animationDuration={800}
+                    animationEasing="ease-out"
                   />
                 </>
               )}
