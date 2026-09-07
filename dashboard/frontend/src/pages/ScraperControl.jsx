@@ -192,7 +192,7 @@ export default function ScraperControl() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Configuration Panel */}
-        <Card className="lg:col-span-5 flex flex-col border border-white/10 shadow-sm backdrop-blur-xl p-6">
+        <Card className="lg:col-span-5 flex flex-col border border-border shadow-sm backdrop-blur-xl p-6">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-6">
             <div>
               <CardTitle className="text-xl">Configuration</CardTitle>
@@ -206,11 +206,11 @@ export default function ScraperControl() {
               <div className="space-y-3">
                 <label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Download Quality</label>
                 <ToggleGroup type="single" value={scraperType} onValueChange={(val) => val && setScraperType(val)} disabled={isRunning} className="justify-start flex-col sm:flex-row w-full">
-                  <ToggleGroupItem value="api" aria-label="Fast · 192kbps" className="flex-1 py-6 h-auto flex flex-col gap-1 items-start rounded-xl bg-card/20 backdrop-blur-sm transition-all duration-300 data-[state=on]:bg-[#1ed760]/15 data-[state=on]:border-[#1ed760]/50 data-[state=on]:shadow-[0_0_20px_rgba(30,215,96,0.2)] data-[state=on]:scale-[1.02] data-[state=off]:opacity-60 data-[state=off]:hover:opacity-90 data-[state=off]:hover:bg-card/30 border border-white/10">
+                  <ToggleGroupItem value="api" aria-label="Fast · 192kbps" className="flex-1 py-6 h-auto flex flex-col gap-1 items-start rounded-xl bg-card backdrop-blur-sm transition-all duration-300 data-[state=on]:bg-[#1ed760]/15 data-[state=on]:border-[#1ed760]/50 data-[state=on]:shadow-[0_0_20px_rgba(30,215,96,0.2)] data-[state=on]:scale-[1.02] data-[state=off]:opacity-60 data-[state=off]:hover:opacity-90 data-[state=off]:hover:bg-card border border-border">
                     <div className="flex items-center gap-2 font-bold text-base"><span className="text-xl">⚡</span> Fast · 192kbps</div>
                     <div className="text-xs text-muted-foreground font-normal">Quick track downloads</div>
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="selenium" aria-label="HQ · 320kbps" className="flex-1 py-6 h-auto flex flex-col gap-1 items-start rounded-xl bg-card/20 backdrop-blur-sm transition-all duration-300 data-[state=on]:bg-[#1ed760]/15 data-[state=on]:border-[#1ed760]/50 data-[state=on]:shadow-[0_0_20px_rgba(30,215,96,0.2)] data-[state=on]:scale-[1.02] data-[state=off]:opacity-60 data-[state=off]:hover:opacity-90 data-[state=off]:hover:bg-card/30 border border-white/10">
+                  <ToggleGroupItem value="selenium" aria-label="HQ · 320kbps" className="flex-1 py-6 h-auto flex flex-col gap-1 items-start rounded-xl bg-card backdrop-blur-sm transition-all duration-300 data-[state=on]:bg-[#1ed760]/15 data-[state=on]:border-[#1ed760]/50 data-[state=on]:shadow-[0_0_20px_rgba(30,215,96,0.2)] data-[state=on]:scale-[1.02] data-[state=off]:opacity-60 data-[state=off]:hover:opacity-90 data-[state=off]:hover:bg-card border border-border">
                     <div className="flex items-center gap-2 font-bold text-base"><span className="text-xl">◆</span> HQ · 320kbps</div>
                     <div className="text-xs text-muted-foreground font-normal">Album-quality audio</div>
                   </ToggleGroupItem>
@@ -271,7 +271,7 @@ export default function ScraperControl() {
         </Card>
 
         {/* Progress Panel */}
-        <Card className={`lg:col-span-7 flex flex-col overflow-hidden transition-colors border shadow-sm backdrop-blur-xl ${isRunning ? 'ring-2 ring-primary/50' : isDone ? 'ring-2 ring-green-500/50' : isError ? 'ring-2 ring-red-500/50' : 'border-white/10'}`}>
+        <Card className={`lg:col-span-7 flex flex-col overflow-hidden transition-colors border shadow-sm backdrop-blur-xl ${isRunning ? 'ring-2 ring-primary/50' : isDone ? 'ring-2 ring-green-500/50' : isError ? 'ring-2 ring-red-500/50' : 'border-border'}`}>
           <CardContent className="p-0 flex-1 flex flex-col">
             {(isRunning || hasOutput) ? (
               <div className="flex flex-col h-full">
@@ -308,7 +308,7 @@ export default function ScraperControl() {
                 </div>
 
                 {/* Footer / Terminal Toggle */}
-                <div className="p-4 bg-muted/30 flex items-center justify-between">
+                <div className="p-4 bg-muted flex items-center justify-between">
                   <span className="text-sm font-bold">{overallProgress.toFixed(1)}% complete</span>
                   <Button variant="ghost" size="sm" onClick={() => setShowTerminal(!showTerminal)} className="press-scale h-9">
                     {showTerminal ? 'Hide' : 'Show'} Raw Logs
@@ -334,7 +334,7 @@ export default function ScraperControl() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center flex-1 p-12 text-center text-muted-foreground">
-                <div className="size-24 mb-6 rounded-full flex items-center justify-center bg-muted/20">
+                <div className="size-24 mb-6 rounded-full flex items-center justify-center bg-muted">
                   <Icons.Scraper className="size-12 opacity-50" />
                 </div>
                 <h3 className="text-xl font-bold text-foreground mb-2">Ready to download</h3>

@@ -21,6 +21,11 @@ import openpyxl
 import logging
 from pythonjsonlogger import jsonlogger
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 log_handler = logging.FileHandler('scrape_audit.log')
 formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s')
 log_handler.setFormatter(formatter)
@@ -572,8 +577,16 @@ def resolve_item(item_dict, idx, total, downloads_dir, persistent_cache, dir_cac
     search_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     ffmpeg_dir = r"C:\Users\ADMIN\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
+    if not (ffmpeg_dir and os.path.exists(ffmpeg_dir)):
+        try:
+            import imageio_ffmpeg
+            ffmpeg_dir = os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
+        except Exception:
+            ffmpeg_dir = None
+
+    # ponytail: node js_runtime + web/default player client eliminates YouTube 403 Forbidden errors
     ydl_opts = {
-        'ffmpeg_location': ffmpeg_dir if os.path.exists(ffmpeg_dir) else None,
+        'ffmpeg_location': ffmpeg_dir if ffmpeg_dir and os.path.exists(ffmpeg_dir) else None,
         'format': 'm4a/bestaudio/best',
         'outtmpl': os.path.join(track_download_dir, '%(title)s.%(ext)s'),
         'writethumbnail': True,
@@ -583,6 +596,8 @@ def resolve_item(item_dict, idx, total, downloads_dir, persistent_cache, dir_cac
         ],
         'quiet': True,
         'no_warnings': True,
+        'js_runtimes': {'node': {}},
+        'extractor_args': {'youtube': {'player_client': ['web', 'default']}},
     }
 
     base = {

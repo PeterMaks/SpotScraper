@@ -1,11 +1,11 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 import { useAppContext } from '../AppContext';
 import * as Icons from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 
 export default function DetailedLogs() {
@@ -53,7 +53,7 @@ export default function DetailedLogs() {
     return () => window.removeEventListener('resize', handleResize);
   }, [logsFilter]);
 
-  useEffect(() => { fetchLogs(); }, []);
+  useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
   const getLogsList = () => {
     const list = [];
@@ -144,7 +144,7 @@ export default function DetailedLogs() {
         setSelectedLogs(new Set());
         fetchLogs();
       }
-    } catch (err) {}
+    } catch (err) { console.error(err); }
   };
 
   const handleClearAll = async () => {
@@ -155,7 +155,7 @@ export default function DetailedLogs() {
         setSelectedLogs(new Set());
         fetchLogs();
       }
-    } catch (err) {}
+    } catch (err) { console.error(err); }
   };
 
   const statusConfig = {
@@ -219,11 +219,11 @@ export default function DetailedLogs() {
         </div>
       </div>
 
-      <Card className="border border-white/10 shadow-sm overflow-hidden rounded-2xl backdrop-blur-xl">
+      <Card className="border border-border shadow-sm overflow-hidden rounded-2xl backdrop-blur-xl">
         <div className="rounded-2xl">
           <Table>
             <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
+              <TableRow className="border-border hover:bg-transparent">
                 <TableHead className="w-[50px] text-center">
                   <input type="checkbox" className="accent-primary w-4 h-4 cursor-pointer" checked={filteredLogs.length > 0 && selectedLogs.size === filteredLogs.length} onChange={handleSelectAll} />
                 </TableHead>
@@ -245,7 +245,7 @@ export default function DetailedLogs() {
                   const isSelected = selectedLogs.has(item.query);
                   const sConfig = statusConfig[item.status] || statusConfig.unknown;
                   return (
-                    <TableRow key={idx} data-state={isSelected ? "selected" : undefined} className={`cursor-pointer border-white/5 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/30'}`} onClick={(e) => { if (e.target.type !== 'checkbox') handleCheckboxClick(e, item.query, idx); }}>
+                    <TableRow key={idx} data-state={isSelected ? "selected" : undefined} className={`cursor-pointer border-border transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted'}`} onClick={(e) => { if (e.target.type !== 'checkbox') handleCheckboxClick(e, item.query, idx); }}>
                       <TableCell className="text-center py-3" onClick={(e) => handleCheckboxClick(e, item.query, idx)}>
                         <input type="checkbox" className="accent-primary w-4 h-4 pointer-events-none cursor-pointer" checked={isSelected} readOnly />
                       </TableCell>
@@ -271,7 +271,7 @@ export default function DetailedLogs() {
       </Card>
 
       {selectedLogs.size > 0 && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-background/90 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-2xl px-6 py-4 flex items-center gap-6 z-40 animate-in slide-in-from-bottom-10 fade-in duration-300 border border-white/10">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-background/90 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-2xl px-6 py-4 flex items-center gap-6 z-40 animate-in slide-in-from-bottom-10 fade-in duration-300 border border-border">
           <span className="text-primary font-bold text-lg">{selectedLogs.size} logs selected</span>
           <div className="flex items-center gap-2">
             <Button variant="destructive" onClick={handleBatchDelete} className="rounded-xl h-10"><Icons.Trash className="size-4 mr-2" /> Archive Selected</Button>

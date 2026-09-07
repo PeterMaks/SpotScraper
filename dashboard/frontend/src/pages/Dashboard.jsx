@@ -1,5 +1,5 @@
 
-import React from 'react';
+import { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from "react";
 import { useAppContext } from '../AppContext';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,19 +81,19 @@ function mergeStats(a, b) {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 function NumberPopIn({ value }) {
-  const [isAnimating, setIsAnimating] = React.useState(false);
-  const prevValueRef = React.useRef(value);
+  
+  const prevValueRef = useRef(value);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (prevValueRef.current !== value) {
       prevValueRef.current = value;
-      setIsAnimating(false);
-      const raf = requestAnimationFrame(() => setIsAnimating(true));
+      
+      const raf = requestAnimationFrame(() => {});
       return () => cancelAnimationFrame(raf);
     }
   }, [value]);
 
-  React.useEffect(() => { setIsAnimating(true); }, []);
+  
 
   const str = String(value ?? '');
   return (
@@ -109,7 +109,7 @@ function NumberPopIn({ value }) {
 function StatCard({ label, value, unit, accent, footnote }) {
   return (
     <Card
-      className="backdrop-blur-xl bg-card/40 border border-white/10 shadow-sm p-6 cursor-default"
+      className="bg-card border border-border shadow-sm p-6 cursor-default"
       style={{
         transition:
           'transform 200ms cubic-bezier(0.23,1,0.32,1), box-shadow 200ms cubic-bezier(0.23,1,0.32,1)',
@@ -149,10 +149,10 @@ const TOGGLE_VIEWS = [
  * in index.css. The indicator physically moves between options.
  */
 function PlatformToggle({ view, setView }) {
-  const tabRefs = React.useRef([]);
-  const pillRef = React.useRef(null);
+  const tabRefs = useRef([]);
+  const pillRef = useRef(null);
 
-  const movePill = React.useCallback((idx) => {
+  const movePill = useCallback((idx) => {
     const tab = tabRefs.current[idx];
     const pill = pillRef.current;
     if (!tab || !pill) return;
@@ -160,7 +160,7 @@ function PlatformToggle({ view, setView }) {
     pill.style.transform = `translateX(${tab.offsetLeft}px)`;
   }, []);
 
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     const idx = TOGGLE_VIEWS.findIndex(v => v.key === view);
     movePill(idx >= 0 ? idx : 0);
   }, [view, movePill]);
@@ -202,8 +202,8 @@ export default function Dashboard() {
     backendUrl,
   } = useAppContext();
 
-  const [appleUploading, setAppleUploading] = React.useState(false);
-  const [appleUploadStatus, setAppleUploadStatus] = React.useState('');
+  const [appleUploading, setAppleUploading] = useState(false);
+  const [appleUploadStatus, setAppleUploadStatus] = useState('');
 
   const handleAppleUpload = async (e) => {
     const files = e.target.files;
@@ -236,7 +236,7 @@ export default function Dashboard() {
     }
   };
 
-  const selectedStats = React.useMemo(() => {
+  const selectedStats = useMemo(() => {
     if (platformView === 'spotify') return stats;
     if (platformView === 'apple')   return appleStats;
     return mergeStats(stats, appleStats);
@@ -269,7 +269,7 @@ export default function Dashboard() {
 
       {/* Upload Cards */}
       <div className="grid gap-6 md:grid-cols-2">
-        <Card className="backdrop-blur-xl bg-card/40 border border-dashed border-white/15 shadow-sm transition-colors hover:border-primary/50 p-6">
+        <Card className="bg-card border border-dashed border-border shadow-sm transition-colors hover:border-primary/50 p-6">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl">Spotify Data</CardTitle>
             <CardDescription>StreamingHistory*.json, Playlist*.json, .csv / .xlsx</CardDescription>
@@ -290,7 +290,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="backdrop-blur-xl bg-card/40 border border-dashed border-white/15 shadow-sm transition-colors hover:border-primary/50 p-6">
+        <Card className="bg-card border border-dashed border-border shadow-sm transition-colors hover:border-primary/50 p-6">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl">Apple Music Data</CardTitle>
             <CardDescription>Apple Music - Play History Daily Tracks .csv</CardDescription>
@@ -318,7 +318,7 @@ export default function Dashboard() {
           {/* Stat cards skeleton */}
           <div className="grid gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="rounded-xl border border-white/10 p-6 flex flex-col gap-3">
+              <div key={i} className="rounded-xl border border-border p-6 flex flex-col gap-3">
                 <div className="skeleton-shimmer h-3 w-20 rounded" />
                 <div className="skeleton-shimmer h-8 w-16 rounded" />
                 <div className="skeleton-shimmer h-3 w-12 rounded" />
@@ -370,7 +370,7 @@ export default function Dashboard() {
           {/* Day of Week + Genres */}
           <div className="grid gap-6 grid-cols-1 lg:grid-cols-4">
             <DayOfWeekChart data={selectedStats.listeningByDay || []} />
-            <Card className="backdrop-blur-xl bg-card/40 border border-white/10 shadow-sm col-span-1 md:col-span-2 p-6">
+            <Card className="bg-card border border-border shadow-sm col-span-1 md:col-span-2 p-6">
               <CardHeader className="pb-4">
                 <CardTitle className="text-xl">Top Genres</CardTitle>
                 <CardDescription>By total listening hours</CardDescription>
@@ -402,7 +402,7 @@ export default function Dashboard() {
 
           {/* Top Artists + Tracks */}
           <div className="grid gap-6 md:grid-cols-2">
-            <Card className="backdrop-blur-xl bg-card/40 border border-white/10 shadow-sm p-6">
+            <Card className="bg-card border border-border shadow-sm p-6">
               <CardHeader className="pb-4">
                 <CardTitle className="text-xl">Top Artists</CardTitle>
                 <CardDescription>Top 20</CardDescription>
@@ -426,7 +426,7 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            <Card className="backdrop-blur-xl bg-card/40 border border-white/10 shadow-sm p-6">
+            <Card className="bg-card border border-border shadow-sm p-6">
               <CardHeader className="pb-4">
                 <CardTitle className="text-xl">Top Tracks</CardTitle>
                 <CardDescription>Top 20</CardDescription>
@@ -434,14 +434,14 @@ export default function Dashboard() {
               <CardContent>
                 <Table>
                   <TableHeader>
-                    <TableRow className="border-white/10 hover:bg-transparent">
+                    <TableRow className="border-border hover:bg-transparent">
                       <TableHead className="text-muted-foreground">Track Info</TableHead>
                       <TableHead className="text-right text-muted-foreground">Playtime</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {selectedStats.topTracks.slice(0, 10).map((track, idx) => (
-                      <TableRow key={`${track.name}-${track.artist}`} className="stagger-item border-white/5">
+                      <TableRow key={`${track.name}-${track.artist}`} className="stagger-item border-border">
                         <TableCell className="py-3">
                           <div className="font-semibold text-sm">{idx + 1}. {track.name}</div>
                           <div className="text-xs text-muted-foreground mt-1">{track.artist} • {track.album}</div>
@@ -465,7 +465,7 @@ export default function Dashboard() {
           {/* Top Albums + Podcasts */}
           <div className="grid gap-6 md:grid-cols-2">
             {(selectedStats.topAlbums || []).length > 0 && (
-              <Card className="backdrop-blur-xl bg-card/40 border border-white/10 shadow-sm p-6">
+              <Card className="bg-card border border-border shadow-sm p-6">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-xl">Top Albums</CardTitle>
                   <CardDescription>By Playtime</CardDescription>
@@ -488,7 +488,7 @@ export default function Dashboard() {
             )}
 
             {(selectedStats.topPodcasts || []).length > 0 && (
-              <Card className="backdrop-blur-xl bg-card/40 border border-white/10 shadow-sm p-6">
+              <Card className="bg-card border border-border shadow-sm p-6">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-xl">Top Podcasts</CardTitle>
                   <CardDescription>By Playtime</CardDescription>
@@ -497,7 +497,7 @@ export default function Dashboard() {
                   {selectedStats.topPodcasts.map((podcast, idx) => {
                     const pct = (podcast.hours / (selectedStats.topPodcasts[0]?.hours || 1)) * 100;
                     return (
-                      <div key={podcast.name} className="flex flex-col gap-1.5 p-3 rounded-lg bg-card/30 backdrop-blur-md border border-white/5">
+                      <div key={podcast.name} className="flex flex-col gap-1.5 p-3 rounded-lg bg-card backdrop-blur-md border border-border">
                         <div className="flex justify-between items-center text-sm">
                           <span className="font-semibold truncate pr-2">{idx + 1}. {podcast.name}</span>
                           <span className="text-muted-foreground shrink-0 font-medium">{podcast.hours} hrs</span>
@@ -513,7 +513,7 @@ export default function Dashboard() {
 
         </div>
       ) : (
-        <Card className="text-center p-16 backdrop-blur-xl bg-card/40 border border-dashed border-white/15">
+        <Card className="text-center p-16 bg-card border border-dashed border-border">
           <CardTitle className="mb-3 text-2xl">No {platformLabel} Data Found</CardTitle>
           <CardDescription className="text-base">
             {platformView === 'apple'

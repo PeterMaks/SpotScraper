@@ -15,72 +15,74 @@
   }
 
   :root {
-    /* Light theme — warm white surfaces, Spotify Green accent */
-    --background: oklch(0.98 0 0 / 0%);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0 / 30%);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0 / 65%);
-    --popover-foreground: oklch(0.145 0 0);
+    --background: #ffffff;
+    --foreground: #09090b;
+    --card: #ffffff;
+    --card-foreground: #09090b;
+    --popover: #ffffff;
+    --popover-foreground: #09090b;
     --primary: #1ed760;
     --primary-foreground: #000000;
-    --secondary: oklch(0.97 0 0 / 50%);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0 / 50%);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0 / 50%);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: #f3727f;
-    --border: transparent;
-    --input: transparent;
-    --ring: #1ed760;
-    --chart-1: #1ed760;
-    --chart-2: #1db954;
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.5rem;
-    --sidebar: oklch(1 0 0 / 20%);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: #1ed760;
-    --sidebar-primary-foreground: #000000;
-    --sidebar-accent: oklch(0.97 0 0 / 40%);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: transparent;
-  }
-
-  .dark {
-    /* Spotify dark theme — semi-transparent glass surfaces, #1ed760 accent */
-    --background: #0a0a0a;
-    --foreground: #ffffff;
-    --card: oklch(0.2 0 0 / 50%);
-    --card-foreground: #ffffff;
-    --popover: oklch(0.22 0 0 / 70%);
-    --popover-foreground: #ffffff;
-    --primary: #1ed760;
-    --primary-foreground: #000000;
-    --secondary: oklch(0.22 0 0 / 50%);
-    --secondary-foreground: #ffffff;
-    --muted: oklch(0.25 0 0 / 50%);
-    --muted-foreground: #b3b3b3;
-    --accent: oklch(0.25 0 0 / 60%);
-    --accent-foreground: #ffffff;
-    --destructive: #f3727f;
-    --border: transparent;
-    --input: transparent;
+    --secondary: #f4f4f5;
+    --secondary-foreground: #18181b;
+    --muted: #f4f4f5;
+    --muted-foreground: #71717a;
+    --accent: #f4f4f5;
+    --accent-foreground: #18181b;
+    --destructive: #ef4444;
+    --destructive-foreground: #fafafa;
+    --border: #e4e4e7;
+    --input: #e4e4e7;
     --ring: #1ed760;
     --chart-1: #1ed760;
     --chart-2: #1db954;
     --chart-3: #539df5;
     --chart-4: #ffa42b;
     --chart-5: #f3727f;
-    --sidebar: oklch(0.15 0 0 / 50%);
-    --sidebar-foreground: #ffffff;
+    --radius: 0.5rem;
+    --sidebar: #fafafa;
+    --sidebar-foreground: #18181b;
     --sidebar-primary: #1ed760;
     --sidebar-primary-foreground: #000000;
-    --sidebar-accent: oklch(0.25 0 0 / 60%);
-    --sidebar-accent-foreground: #ffffff;
-    --sidebar-border: transparent;
+    --sidebar-accent: #f4f4f5;
+    --sidebar-accent-foreground: #18181b;
+    --sidebar-border: #e4e4e7;
+    --sidebar-ring: #1ed760;
+  }
+
+  .dark {
+    --background: #09090b;
+    --foreground: #fafafa;
+    --card: #09090b;
+    --card-foreground: #fafafa;
+    --popover: #09090b;
+    --popover-foreground: #fafafa;
+    --primary: #1ed760;
+    --primary-foreground: #000000;
+    --secondary: #27272a;
+    --secondary-foreground: #fafafa;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+    --accent: #27272a;
+    --accent-foreground: #fafafa;
+    --destructive: #ef4444;
+    --destructive-foreground: #fafafa;
+    --border: #27272a;
+    --input: #27272a;
+    --ring: #1ed760;
+    --chart-1: #1ed760;
+    --chart-2: #1db954;
+    --chart-3: #539df5;
+    --chart-4: #ffa42b;
+    --chart-5: #f3727f;
+    --sidebar: #09090b;
+    --sidebar-foreground: #fafafa;
+    --sidebar-primary: #1ed760;
+    --sidebar-primary-foreground: #000000;
+    --sidebar-accent: #27272a;
+    --sidebar-accent-foreground: #fafafa;
+    --sidebar-border: #27272a;
+    --sidebar-ring: #1ed760;
   }
 
   * {
@@ -89,12 +91,6 @@
 
   body {
     @apply bg-background text-foreground bg-fixed;
-    /* Base subtle gradient to ensure fallback */
-    background-color: #f8fafc;
-  }
-
-  .dark body {
-    background-color: #0a0a0a;
   }
 
   html {

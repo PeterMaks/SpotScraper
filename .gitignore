@@ -94,3 +94,9 @@ __pycache__/
 .graphify_analysis.json
 .graphify_extract.json
 DESIGN.md
+.github/hooks/impeccable.json
+.impeccable/
+.codex/
+.claudecode/
+.github/skills/
+PRODUCT.md

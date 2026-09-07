@@ -1,8 +1,8 @@
 
 
-import React from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
-import { useAppContext } from '../AppContext';
+import { useState, useEffect, useRef } from "react";
+import { useAppContext } from "../AppContext";
 import { ThemeProvider, useTheme } from './ThemeProvider';
 import Icons from './Icons';
 import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
@@ -13,10 +13,10 @@ function ThemeToggle({ className }) {
   const { theme, setTheme } = useTheme();
   const stateVal = theme === 'dark' ? 'a' : 'b';
   return (
-    <Button 
-      variant="ghost" 
-      size="icon" 
-      className={className} 
+    <Button
+      variant="ghost"
+      size="icon"
+      className={className}
       onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       title="Toggle Theme"
     >
@@ -85,19 +85,19 @@ export default function Layout() {
   } = useAppContext();
 
   // Mounted state for audio player slide-up entrance
-  const [playerVisible, setPlayerVisible] = React.useState(false);
-  React.useEffect(() => {
+  const [playerVisible, setPlayerVisible] = useState(false);
+  useEffect(() => {
     if (currentTrack && !playerVisible) {
       // Small rAF delay so CSS transition fires after element is in DOM
       const raf = requestAnimationFrame(() => setPlayerVisible(true));
       return () => cancelAnimationFrame(raf);
     }
-    if (!currentTrack) setPlayerVisible(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!currentTrack) { requestAnimationFrame(() => setPlayerVisible(false)); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrack]);
 
-  const sliderRef = React.useRef(null);
-  const timeTextRef = React.useRef(null);
+  const sliderRef = useRef(null);
+  const timeTextRef = useRef(null);
 
   const formatTime = (timeInSeconds) => {
     if (isNaN(timeInSeconds)) return "0:00";
@@ -116,7 +116,7 @@ export default function Layout() {
 
       <TooltipProvider delayDuration={0}>
         <SidebarProvider>
-        <Sidebar variant="inset" collapsible="icon" className="backdrop-blur-2xl border-r border-white/20 dark:border-white/10">
+          <Sidebar variant="inset" collapsible="icon" className="backdrop-blur-2xl border-r border-white/20 dark:border-white/10">
             <SidebarHeader>
               <div className="flex items-center justify-between p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0">
                 <div className="flex items-center gap-3">
@@ -132,7 +132,7 @@ export default function Layout() {
                 </div>
               </div>
             </SidebarHeader>
-            
+
             <SidebarContent className="px-2 py-4">
               <SidebarGroup>
                 <SidebarMenu className="gap-2">
@@ -157,6 +157,14 @@ export default function Layout() {
                       <NavLink to="/downloads">
                         <Icons.Downloads className="size-5" />
                         <span>Downloads ({downloads.length})</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={location.pathname.startsWith('/visualizer')} tooltip="Pulsar Visualizer" className="h-11 text-base font-medium rounded-xl">
+                      <NavLink to="/visualizer">
+                        <Icons.Activity className="size-5" />
+                        <span>Visualizer</span>
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -186,19 +194,19 @@ export default function Layout() {
                   className="scraper-status-dot size-3 rounded-full shrink-0"
                   data-status={
                     scraperStatus === 'running' ? 'running'
-                    : scraperStatus === 'success' ? 'success'
-                    : scraperStatus === 'error' ? 'error'
-                    : 'idle'
+                      : scraperStatus === 'success' ? 'success'
+                        : scraperStatus === 'error' ? 'error'
+                          : 'idle'
                   }
                 />
                 <span className="text-sm font-medium text-muted-foreground truncate group-data-[collapsible=icon]:hidden">
-                  {scraperStatus === 'running' 
-                    ? 'Scraper Running' 
-                    : scraperStatus === 'success' 
-                    ? 'Idle (Last OK)' 
-                    : scraperStatus === 'error'
-                    ? 'Idle (Error)'
-                    : 'Scraper Idle'}
+                  {scraperStatus === 'running'
+                    ? 'Scraper Running'
+                    : scraperStatus === 'success'
+                      ? 'Idle (Last OK)'
+                      : scraperStatus === 'error'
+                        ? 'Idle (Error)'
+                        : 'Scraper Idle'}
                 </span>
               </div>
             </SidebarFooter>
@@ -213,16 +221,16 @@ export default function Layout() {
               <SidebarTrigger className="bg-background/50 backdrop-blur-md border border-white/10 shadow-sm" />
               <ThemeToggle className="bg-background/50 backdrop-blur-md border border-white/10 shadow-sm" />
             </div>
-            
+
             <div className="flex-1 overflow-auto p-4 pt-16 md:pt-8 md:p-6 lg:p-10 custom-scrollbar">
               <div className="container mx-auto max-w-7xl">
                 <Outlet />
               </div>
             </div>
           </main>
-          
+
           {/* Global Audio Player */}
-          <audio 
+          <audio
             ref={audioRef}
             preload="auto"
             onCanPlay={() => {
@@ -250,10 +258,10 @@ export default function Layout() {
             >
               <div className="flex items-center gap-4 shrink min-w-0 flex-1">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-secondary text-secondary-foreground shadow-inner border border-white/10 overflow-hidden relative">
-                  <img 
+                  <img
                     key={currentTrack.name}
-                    src={`${backendUrl}/api/downloads/art/${encodeURIComponent(currentTrack.name)}`} 
-                    className="w-full h-full object-cover absolute inset-0 z-10" 
+                    src={`${backendUrl}/api/downloads/art/${encodeURIComponent(currentTrack.name)}`}
+                    className="w-full h-full object-cover absolute inset-0 z-10"
                     loading="lazy"
                     onError={(e) => { e.target.style.display = 'none'; }}
                     alt=""
@@ -269,7 +277,7 @@ export default function Layout() {
                   </span>
                 </div>
               </div>
-              
+
               <div className="flex flex-col items-center gap-1.5 shrink-0 w-1/2">
                 <div className="flex items-center gap-3">
                   <Button variant="ghost" size="icon" className="press-scale hover:bg-white/10 rounded-full" onClick={handlePlayPrev} disabled={downloads.length === 0} title="Previous">
@@ -291,13 +299,13 @@ export default function Layout() {
                 </div>
                 <div className="hidden sm:flex items-center gap-2 w-full max-w-md">
                   <span ref={timeTextRef} className="text-[11px] font-medium text-muted-foreground w-10 text-right tabular-nums">0:00</span>
-                  <input 
+                  <input
                     ref={sliderRef}
-                    type="range" 
-                    className="flex-1 h-1.5 cursor-pointer appearance-none rounded-full bg-secondary/50 accent-primary backdrop-blur-sm" 
-                    min="0" 
-                    max={duration || 0} 
-                    defaultValue="0" 
+                    type="range"
+                    className="flex-1 h-1.5 cursor-pointer appearance-none rounded-full bg-secondary/50 accent-primary backdrop-blur-sm"
+                    min="0"
+                    max={duration || 0}
+                    defaultValue="0"
                     onChange={(e) => {
                       if (audioRef.current) audioRef.current.currentTime = e.target.value;
                     }}
@@ -308,13 +316,13 @@ export default function Layout() {
 
               <div className="hidden md:flex items-center gap-2 justify-end w-20">
                 <Icons.Volume className="size-4 text-muted-foreground" />
-                <input 
-                  type="range" 
-                  className="w-full h-1.5 cursor-pointer appearance-none rounded-full bg-secondary/50 accent-primary backdrop-blur-sm" 
-                  min="0" 
-                  max="1" 
-                  step="0.01" 
-                  value={volume} 
+                <input
+                  type="range"
+                  className="w-full h-1.5 cursor-pointer appearance-none rounded-full bg-secondary/50 accent-primary backdrop-blur-sm"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={volume}
                   onChange={handleVolumeChange}
                 />
               </div>

@@ -98,7 +98,8 @@ export const AppProvider = ({ children }) => {
       }
       
       setUploadStatus(`Successfully uploaded ${successCount} file(s).`);
-      fetchStats();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchStats();
     } catch (err) {
       console.error(err);
       setUploadStatus(`Upload failed: ${err.message}`);

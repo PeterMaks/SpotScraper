@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from "react";
 import { 
   UserCircle, Settings, Download, CheckSquare, 
   MousePointerClick, Mail, Database, ListMusic, 
@@ -23,7 +23,7 @@ export default function AcquireDataGuide() {
   return (
     <div className="flex flex-col items-center py-10 px-6 w-full animate-in fade-in duration-500">
       <header className="text-center mb-16 max-w-3xl">
-        <div className="inline-flex items-center gap-3 mb-8 px-6 py-3 bg-secondary/50 rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+        <div className="inline-flex items-center gap-3 mb-8 px-6 py-3 bg-secondary rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
           <div className="flex size-8 rounded-lg bg-gradient-to-br from-primary to-emerald-500 items-center justify-center text-white">
             <DatabaseZap size={20} />
           </div>
@@ -35,7 +35,7 @@ export default function AcquireDataGuide() {
         </p>
       </header>
 
-      <div className="flex relative bg-secondary/50 p-1.5 rounded-full mb-12 w-full max-w-md mx-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+      <div className="flex relative bg-secondary p-1.5 rounded-full mb-12 w-full max-w-md mx-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
         <Button 
           variant={activeTab === 'full' ? 'default' : 'ghost'} 
           className="flex-1 rounded-full text-sm font-semibold h-10"
@@ -73,7 +73,7 @@ export default function AcquireDataGuide() {
 
             <div className="grid gap-4 mb-12">
               {steps.map((step, idx) => (
-                <div key={idx} className="flex items-start gap-4 p-5 bg-secondary/30 rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+                <div key={idx} className="flex items-start gap-4 p-5 bg-secondary rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
                   <div className="text-muted-foreground bg-background p-2.5 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
                     {step.icon}
                   </div>
@@ -112,7 +112,7 @@ export default function AcquireDataGuide() {
               If you only need your playlists and don't want to wait 30 days for Spotify's full archive, <strong>Exportify</strong> is a secure third-party tool that connects to the Spotify API and instantly generates CSV files of your playlists.
             </p>
 
-            <div className="flex flex-col items-center gap-8 p-12 bg-secondary/30 rounded-3xl w-full shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-col items-center gap-8 p-12 bg-secondary rounded-3xl w-full shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
               <div className="flex size-20 rounded-3xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 items-center justify-center text-foreground shadow-lg">
                 <ExternalLink size={32} />
               </div>

@@ -181,7 +181,7 @@ export default function Downloads() {
         </Button>
       </div>
 
-      <Card className="backdrop-blur-xl bg-card/40 border border-white/10 shadow-sm p-6">
+      <Card className="bg-card border border-border shadow-sm p-6">
         <CardHeader className="pb-4">
           <CardTitle className="text-xl">Download a Specific Song</CardTitle>
           <CardDescription>Fetch a track immediately by name</CardDescription>
@@ -223,11 +223,11 @@ export default function Downloads() {
         </div>
       </div>
 
-      <Card className="border border-white/10 shadow-sm overflow-hidden rounded-2xl backdrop-blur-xl">
+      <Card className="border border-border shadow-sm overflow-hidden rounded-2xl backdrop-blur-xl">
         <div className="rounded-2xl">
           <Table>
             <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
+              <TableRow className="border-border hover:bg-transparent">
                 <TableHead className="w-[50px] text-center">
                   <input
                     type="checkbox"
@@ -281,7 +281,7 @@ export default function Downloads() {
                     <TableRow 
                       key={file.name}
                       data-state={isSelected ? "selected" : undefined}
-                      className={`stagger-item cursor-pointer group border-white/5 transition-colors ${isRowPlaying ? 'bg-primary/5' : isSelected ? 'bg-primary/5' : 'hover:bg-muted/30'}`}
+                      className={`stagger-item cursor-pointer group border-border transition-colors ${isRowPlaying ? 'bg-primary/5' : isSelected ? 'bg-primary/5' : 'hover:bg-muted'}`}
                       onDoubleClick={() => handlePlayTrack(file)}
                       onClick={(e) => {
                         if (e.target.type === 'checkbox') return;
@@ -312,7 +312,7 @@ export default function Downloads() {
                       </TableCell>
                       <TableCell className="py-3">
                         <div className="flex items-center gap-3">
-                          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground overflow-hidden relative border border-white/5">
+                          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground overflow-hidden relative border border-border">
                             <img 
                               src={`${backendUrl}/api/downloads/art/${encodeURIComponent(file.name)}`} 
                               className="w-full h-full object-cover absolute inset-0 z-10" 
@@ -353,7 +353,7 @@ export default function Downloads() {
       </Card>
 
       {selectedFiles.size > 0 && createPortal(
-        <div className={`fixed ${currentTrack ? 'bottom-32' : 'bottom-6'} left-1/2 -translate-x-1/2 w-[90%] max-w-2xl rounded-2xl bg-background/90 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] px-6 py-4 flex items-center justify-between gap-4 z-[110] animate-in slide-in-from-bottom-10 fade-in duration-300 transition-[bottom] duration-300`}>
+        <div className={`fixed ${currentTrack ? 'bottom-32' : 'bottom-6'} left-1/2 -translate-x-1/2 w-[90%] max-w-2xl rounded-2xl bg-background/90 backdrop-blur-xl border border-border shadow-[0_8px_32px_rgba(0,0,0,0.5)] px-6 py-4 flex items-center justify-between gap-4 z-[110] animate-in slide-in-from-bottom-10 fade-in duration-300 transition-[bottom] duration-300`}>
           <span className="text-primary font-bold text-lg">{selectedFiles.size} items selected</span>
           <div className="flex items-center gap-2">
             <Button onClick={handleBatchDownload} className="press-scale rounded-xl h-10">
