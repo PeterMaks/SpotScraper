@@ -21,11 +21,11 @@ export interface JoyDivisionVisualizerProps {
   autoPlay?: boolean;
   /** FFT Size for Web Audio AnalyserNode (default: 512) */
   fftSize?: number;
-  /** AnalyserNode smoothing time constant (default: 0.70 for snappy transient attacks) */
+  /** AnalyserNode smoothing time constant (default: 0.65 for fast hardware response) */
   smoothingTimeConstant?: number;
-  /** Number of stacked ridgeline slices (dense TouchDesigner benchmark: 140 pulses) */
+  /** Number of stacked ridgeline slices (authentic CP 1919 benchmark: 72 lines) */
   linesCount?: number;
-  /** Number of horizontal sample points along each ridgeline (default: 280) */
+  /** Number of horizontal sample points along each ridgeline (default: 220) */
   pointsPerLine?: number;
 }
 
@@ -42,10 +42,10 @@ function formatTime(seconds: number): string {
 /**
  * Modified Tukey (tapered cosine) envelope:
  * W(u) = 0 for u < uMin or u > uMax
- * Raised cosine taper on boundaries of width wTaper
+ * Cosine taper on boundaries of width wTaper
  * Flat 1.0 in the center active plateau
  */
-function tukeyWindow(u: number, uMin = 0.15, uMax = 0.85, wTaper = 0.07): number {
+function tukeyWindow(u: number, uMin = 0.22, uMax = 0.78, wTaper = 0.06): number {
   if (u < uMin || u > uMax) return 0;
   if (u < uMin + wTaper) {
     return 0.5 * (1 - Math.cos((Math.PI * (u - uMin)) / wTaper));
@@ -57,14 +57,14 @@ function tukeyWindow(u: number, uMin = 0.15, uMax = 0.85, wTaper = 0.07): number
 }
 
 /**
- * Apply 5-point spatial Gaussian smoothing filter [0.06, 0.24, 0.40, 0.24, 0.06]
- * across the points array to eliminate single-bin noise while preserving sharp
- * musical transient peaks and valleys.
+ * Apply 5-point spatial Gaussian smoothing filter [0.08, 0.24, 0.36, 0.24, 0.08]
+ * to eliminate single-bin spikes and jagged pixel noise while preserving clean,
+ * continuous mountain crests and valleys.
  */
 function applySpatialSmoothing(data: Float32Array): Float32Array {
   const n = data.length;
   const smoothed = new Float32Array(n);
-  const k0 = 0.40, k1 = 0.24, k2 = 0.06;
+  const k0 = 0.36, k1 = 0.24, k2 = 0.08;
 
   for (let i = 0; i < n; i++) {
     const im2 = Math.max(0, i - 2);
@@ -83,108 +83,90 @@ function applySpatialSmoothing(data: Float32Array): Float32Array {
 }
 
 /**
- * Synthesize a single horizontal ridgeline slice:
- * - When audio is active: maps continuous logarithmic FFT bins across the active window [0.15, 0.85]
- *   with smooth bass entry shaping, frequency pre-emphasis, and power sharpening.
- * - When idle: creates authentic CP 1919 pulsar terrain with drifting sub-pulse microstructure.
- * - Outside [0.15, 0.85]: strictly flat baseline displacement with subtle radio static.
+ * Generate a single ridgeline slice:
+ * - When audio is active: maps smoothed FFT bins across active window [0.22, 0.78]
+ *   with perceptual frequency distribution and multi-crested CP 1919 morphology.
+ * - Outside [0.22, 0.78]: strictly 0.0 displacement (laser-flat horizontal baselines).
+ * - Zero procedural sine waves or random static for pure, authentic topographical contours.
  */
 function generateRidgelineSlice(
   numPoints: number,
   phase: number,
-  rawData: Uint8Array | null,
+  smoothedBins: Float32Array | null,
   binCount: number,
+  sampleRate: number,
   isAudioActive: boolean
 ): Float32Array {
   const slice = new Float32Array(numPoints);
-  const uMin = 0.15;
-  const uMax = 0.85;
-  const wTaper = 0.07;
-
-  const binMin = 1;
-  const binMax = Math.max(binMin + 1, Math.floor(binCount * 0.90));
+  const uMin = 0.22;
+  const uMax = 0.78;
+  const wTaper = 0.06;
+  const binHz = (sampleRate / 2) / binCount;
 
   for (let j = 0; j < numPoints; j++) {
     const u = j / (numPoints - 1);
     const W = tukeyWindow(u, uMin, uMax, wTaper);
 
-    // Baseline silence outside active pulse window with subtle radio static
+    // Flank zones outside [0.22, 0.78] are strictly flat 0.0
     if (W <= 0.0001) {
-      slice[j] = (Math.random() - 0.5) * 0.0015;
+      slice[j] = 0.0;
       continue;
     }
 
     const r = (u - uMin) / (uMax - uMin); // [0, 1] relative active position
 
-    if (isAudioActive && rawData) {
-      // 1. Continuous Logarithmic Frequency Bin Interpolation
-      const logBin = binMin * Math.pow(binMax / binMin, r);
-      const lowIndex = Math.floor(logBin);
-      const highIndex = Math.min(lowIndex + 1, binCount - 1);
-      const interp = logBin - lowIndex;
+    if (isAudioActive && smoothedBins) {
+      // 1. Perceptual Frequency Mapping (50 Hz to 12 kHz)
+      // Uses power curve r^2.0 so sub-bass, bass, mids, and treble each occupy equal visual width
+      const targetFreq = 50 + (12000 - 50) * Math.pow(r, 2.0);
+      const binIndex = Math.min(binCount - 1, Math.max(1, Math.floor(targetFreq / binHz)));
+      const rawBin = smoothedBins[binIndex];
 
-      const rawVal = ((1 - interp) * rawData[lowIndex] + interp * rawData[highIndex]) / 255.0;
+      // Dynamic contrast expansion: subtract ambient room/mastering noise floor
+      const dynamicVal = Math.max(0, (rawBin - 0.10) / 0.90);
 
-      // Subtract ambient noise floor for high dynamic contrast
-      const normalized = Math.max(0, (rawVal - 0.08) / 0.92);
+      // 2. Authentic CP 1919 Pulsar Crest Morphology:
+      // Left mountain body (sub-bass / kick: r ~ 0.28)
+      const c1 = Math.exp(-Math.pow((r - 0.28) / 0.12, 2));
+      // Center pyramid towers (mids / rhythm guitar / vocals: r ~ 0.50)
+      const c2 = Math.exp(-Math.pow((r - 0.50) / 0.10, 2));
+      // Right needle spires (high-mids / cymbals: r ~ 0.73)
+      const c3 = Math.exp(-Math.pow((r - 0.73) / 0.08, 2));
 
-      // Bass entry shaping: smooth roll-in for sub-bass below 80 Hz so it forms an organic mountain ridge
-      const bassRollIn = Math.min(1.0, Math.pow(Math.max(0.01, r / 0.10), 1.4));
+      // Modulate audio energy with authentic multi-crested morphology to prevent flat block plateaus
+      const structuralEnvelope = c1 * 1.15 + c2 * 1.05 + c3 * 1.30;
 
-      // Frequency Pre-Emphasis: equalizes high frequencies against bass energy
-      const preEmphasisGain = 0.70 + 2.60 * Math.pow(r, 0.90);
-      const boosted = normalized * preEmphasisGain * bassRollIn;
+      // 3. High-Frequency Pre-Emphasis
+      const preEmphasis = 0.80 + 1.90 * Math.pow(r, 1.15);
+      const audioDisplacement = dynamicVal * preEmphasis * structuralEnvelope;
 
-      // Dynamic Power Sharpening: A_sharp = A^2.2 to enforce acute summits and prevent monolithic blocks
-      const sharpened = Math.pow(Math.min(1.0, boosted), 2.2);
+      // 4. Power Sharpening: acute summits without jagged pixel noise
+      const sharpened = Math.pow(Math.min(1.0, audioDisplacement), 1.55);
 
-      // Microstructure wavelets matching pulsar radio dispersion and scintillation
-      const microSerration =
-        (Math.sin(r * 95 + phase) * 0.5 + 0.5) * 0.08 * (0.25 + 0.75 * r) +
-        (Math.sin(r * 190 - phase * 1.3) * 0.5 + 0.5) * 0.05 * r;
-
-      // Subtle resting floor so mountains retain organic pulsar body during quiet sections
-      const ambientFloor =
-        (Math.exp(-Math.pow((r - 0.28) / 0.14, 2)) * 0.05 +
-         Math.exp(-Math.pow((r - 0.52) / 0.12, 2)) * 0.05 +
-         Math.exp(-Math.pow((r - 0.75) / 0.08, 2)) * 0.06);
-
-      const staticNoise = (Math.random() - 0.5) * 0.002;
-
-      slice[j] = Math.max(0, (sharpened + microSerration + ambientFloor) * W + staticNoise);
+      slice[j] = sharpened * W;
     } else {
-      // Authentic resting CP 1919 pulsar terrain when paused / idle
-      const p1 = Math.exp(-Math.pow((r - 0.26) / 0.13, 2)) * 0.44 * (0.85 + 0.15 * Math.sin(phase * 0.65));
-      const p2 = Math.exp(-Math.pow((r - 0.48) / 0.11, 2)) * 0.48 * (0.85 + 0.15 * Math.cos(phase * 0.85));
-      const p3 = Math.exp(-Math.pow((r - 0.72) / 0.08, 2)) * 0.60 * (0.85 + 0.15 * Math.sin(phase * 1.15));
-      const needle = Math.exp(-Math.pow((r - 0.78) / 0.022, 2)) * 0.50 * (0.85 + 0.15 * Math.cos(phase * 1.35));
+      // Authentic serene CP 1919 contour state when paused or idle
+      const p1 = Math.exp(-Math.pow((r - 0.28) / 0.12, 2)) * 0.44 * (0.85 + 0.15 * Math.sin(phase * 0.80));
+      const p2 = Math.exp(-Math.pow((r - 0.50) / 0.10, 2)) * 0.48 * (0.85 + 0.15 * Math.cos(phase * 1.00));
+      const p3 = Math.exp(-Math.pow((r - 0.73) / 0.08, 2)) * 0.58 * (0.85 + 0.15 * Math.sin(phase * 1.20));
 
-      const serration =
-        (Math.sin(r * 85 + phase * 1.1) * 0.5 + 0.5) * 0.09 +
-        (Math.sin(r * 160 - phase * 1.5) * 0.5 + 0.5) * 0.05 +
-        (Math.sin(r * 240 + phase * 2.0) * 0.5 + 0.5) * 0.03;
-
-      const idleStatic = (Math.random() - 0.5) * 0.002;
-
-      slice[j] = Math.max(0, (p1 + p2 + p3 + needle + serration) * W + idleStatic);
+      slice[j] = (p1 + p2 + p3) * W;
     }
   }
 
-  // Apply spatial Gaussian smoothing to eliminate single-bin noise spikes
+  // 5-point spatial Gaussian smoothing to ensure smooth continuous ridgelines
   return applySpatialSmoothing(slice);
 }
 
 /**
  * JoyDivisionVisualizer
  *
- * Responsive, full-bleed Web Audio & Canvas visualizer recreating the authentic
- * Unknown Pleasures (CP 1919) topographical terrain:
- * - Fluid full-viewport scaling (adapts dynamically to any parent container).
- * - Continuous logarithmic FFT frequency mapping across terrain (replaces hardcoded columns).
- * - Spatial 5-point Gaussian smoothing for organic ridgeline contours.
- * - 140 dense isometric pulses with continuous sub-pixel vertical waterfall flow.
- * - Soft-knee compression preventing typography collision without flat plateau artifacts.
- * - Pure pitch-black occlusion skirt (#000000) and crisp hairline white contours.
+ * Authentic 3D Topographical CP 1919 / Unknown Pleasures Audio Visualizer:
+ * - 72 lines with controlled peak amplitude (maxPeakHeight = deltaY * 8.5) eliminating comb artifacts.
+ * - Oblique 3D perspective projection with trapezoidal width and vertical baseline compression.
+ * - Persistent temporal attack/decay envelope follower for smooth, rolling mountain ridges.
+ * - Laser-flat quiet horizontal flanks outside [0.22, 0.78] with zero procedural noise contamination.
+ * - Dedicated headroom budget preventing typography overlap.
  */
 export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   trackTitle = 'Disorder',
@@ -195,9 +177,9 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   className = '',
   autoPlay = false,
   fftSize = 512,
-  smoothingTimeConstant = 0.70,
-  linesCount = 140,
-  pointsPerLine = 280,
+  smoothingTimeConstant = 0.65,
+  linesCount = 72,
+  pointsPerLine = 220,
 }) => {
   let appContext: ReturnType<typeof useAppContext> | null = null;
   try {
@@ -207,7 +189,7 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
     appContext = null;
   }
 
-  // --- Active track metadata (synced with global player when present) ---
+  // --- Active track metadata ---
   const activeTitle =
     appContext?.currentTrack?.title ||
     (appContext?.currentTrack?.name ? appContext.currentTrack.name.replace(/\.[^/.]+$/, '') : trackTitle) ||
@@ -231,17 +213,18 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   const activeAudioRef = appContext ? appContext.audioRef : localAudioRef;
   const progressBarRef = useRef<HTMLDivElement | null>(null);
 
-  // --- Standalone Web Audio References (only used if outside AppContext) ---
+  // --- Standalone Web Audio References ---
   const localAudioCtxRef = useRef<AudioContext | null>(null);
   const localAnalyserRef = useRef<AnalyserNode | null>(null);
   const localSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
 
-  // --- Animation, Timing & Data Buffers ---
+  // --- Animation, Timing, & Temporal Envelope Buffer ---
   const animationFrameIdRef = useRef<number | null>(null);
   const rawFreqDataRef = useRef<Uint8Array | null>(null);
+  const smoothedBinsRef = useRef<Float32Array | null>(null);
   const lineQueueRef = useRef<Float32Array[]>([]);
   const lastPushTimeRef = useRef<number>(0);
-  const phaseRef = useRef<number>(0);
+  const idlePhaseRef = useRef<number>(0);
 
   // --- Player State ---
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -256,13 +239,13 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   const activeIsPlaying = appContext ? appContext.isPlaying : isPlaying;
 
   // ---------------------------------------------------------------------------
-  // 1. Initialize FIFO Ridgeline Queue with Authentic Pulsar Topography
+  // 1. Initialize FIFO Ridgeline Queue with Authentic Serene CP 1919 Terrain
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const queue: Float32Array[] = [];
     for (let i = 0; i < linesCount; i++) {
       const initialPhase = (linesCount - 1 - i) * 0.08;
-      const slice = generateRidgelineSlice(pointsPerLine, initialPhase, null, 256, false);
+      const slice = generateRidgelineSlice(pointsPerLine, initialPhase, null, 256, 44100, false);
       queue.push(slice);
     }
     lineQueueRef.current = queue;
@@ -270,7 +253,7 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   }, [linesCount, pointsPerLine]);
 
   // ---------------------------------------------------------------------------
-  // 2. Synchronize with Active Audio Element (time, duration, ended)
+  // 2. Synchronize with Active Audio Element
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const el = activeAudioRef?.current;
@@ -329,12 +312,12 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   }, [appContext, fftSize, smoothingTimeConstant]);
 
   // ---------------------------------------------------------------------------
-  // 4. Playback Controls (Connected to Global Player or Local Element)
+  // 4. Playback Controls
   // ---------------------------------------------------------------------------
   const togglePlayPause = async () => {
     if (appContext && activeAudioRef?.current) {
       const el = activeAudioRef.current;
-      appContext.getAnalyserNode(); // ensure active
+      appContext.getAnalyserNode();
       if (appContext.isPlaying) {
         el.pause();
         appContext.setIsPlaying(false);
@@ -397,7 +380,7 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   };
 
   // ---------------------------------------------------------------------------
-  // 5. Canvas Render Loop: Continuous Logarithmic FFT Topography & Full-Bleed Scaling
+  // 5. Canvas Render Loop: Oblique 3D Perspective Projection & Temporal Smoothing
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -407,7 +390,7 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
     if (!ctx) return;
 
     let isRunning = true;
-    const PUSH_INTERVAL_MS = 36.0; // ~27.7 Hz update cadence (decoupled from render FPS)
+    const PUSH_INTERVAL_MS = 38.0; // ~26.3 Hz update cadence
 
     const updateCanvasDimensions = () => {
       if (!canvas || !containerRef.current) return;
@@ -438,7 +421,7 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
       const width = canvas.width;
       const height = canvas.height;
 
-      // Pure pitch-black background wipe (#000000)
+      // Pure pitch-black wipe (#000000)
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, width, height);
 
@@ -449,19 +432,39 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
       const analyser = getActiveAnalyser();
       const isAudioPlaying = appContext ? appContext.isPlaying : isPlaying;
 
-      // Read real-time frequency data if active
-      let rawData: Uint8Array | null = null;
       let binCount = 256;
+      let sampleRate = 44100;
+
+      // -----------------------------------------------------------------------
+      // Persistent Temporal Envelope Follower (Fast Attack: 0.55, Smooth Decay: 0.14)
+      // -----------------------------------------------------------------------
       if (analyser && isAudioPlaying) {
-        if (!rawFreqDataRef.current || rawFreqDataRef.current.length !== analyser.frequencyBinCount) {
-          rawFreqDataRef.current = new Uint8Array(analyser.frequencyBinCount);
+        binCount = analyser.frequencyBinCount;
+        sampleRate = analyser.context?.sampleRate || 44100;
+
+        if (!rawFreqDataRef.current || rawFreqDataRef.current.length !== binCount) {
+          rawFreqDataRef.current = new Uint8Array(binCount);
         }
         analyser.getByteFrequencyData(rawFreqDataRef.current);
-        rawData = rawFreqDataRef.current;
-        binCount = analyser.frequencyBinCount;
+
+        if (!smoothedBinsRef.current || smoothedBinsRef.current.length !== binCount) {
+          smoothedBinsRef.current = new Float32Array(binCount);
+        }
+
+        const raw = rawFreqDataRef.current;
+        const smoothed = smoothedBinsRef.current;
+
+        for (let k = 0; k < binCount; k++) {
+          const rawNorm = raw[k] / 255.0;
+          if (rawNorm > smoothed[k]) {
+            smoothed[k] += (rawNorm - smoothed[k]) * 0.55; // Fast Attack
+          } else {
+            smoothed[k] += (rawNorm - smoothed[k]) * 0.14; // Smooth Exponential Decay
+          }
+        }
       }
 
-      // Decoupled FIFO Queue Cadence: push slices at fixed ~28 Hz
+      // Decoupled FIFO Queue Cadence
       if (lastPushTimeRef.current === 0) {
         lastPushTimeRef.current = timestamp;
       }
@@ -470,8 +473,15 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
       if (elapsed >= PUSH_INTERVAL_MS) {
         const pushes = Math.min(3, Math.floor(elapsed / PUSH_INTERVAL_MS));
         for (let p = 0; p < pushes; p++) {
-          phaseRef.current += 0.08;
-          const newSlice = generateRidgelineSlice(numPoints, phaseRef.current, rawData, binCount, isAudioPlaying);
+          idlePhaseRef.current += 0.015;
+          const newSlice = generateRidgelineSlice(
+            numPoints,
+            idlePhaseRef.current,
+            smoothedBinsRef.current,
+            binCount,
+            sampleRate,
+            isAudioPlaying
+          );
           if (queue.length > 0) {
             queue.pop();
             queue.unshift(newSlice);
@@ -480,54 +490,52 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
         lastPushTimeRef.current = timestamp - (elapsed % PUSH_INTERVAL_MS);
       }
 
-      // Continuous sub-pixel vertical scroll offset [0, 1] for 60/120 FPS fluid motion
+      // Continuous sub-pixel vertical scroll offset [0, 1]
       const scrollOffset = Math.max(0, Math.min(1.0, (timestamp - lastPushTimeRef.current) / PUSH_INTERVAL_MS));
 
-      // Coordinate Budgets: Top 27% reserved for header typography, bottom 16% for player bar
-      const yHorizon = height * 0.27;
-      const yForeground = height * 0.84;
-      const deltaY = (yForeground - yHorizon) / numLines;
-      const maxPeakHeight = height * 0.18;
-      const minPeakY = height * 0.14; // Soft headroom threshold (guarantees zero header collision)
+      // -----------------------------------------------------------------------
+      // Oblique 3D Perspective Projection & Line Pitch Budgets
+      // -----------------------------------------------------------------------
+      const yHorizon = height * 0.27; // Clean clearance below header typography
+      const yForeground = height * 0.83; // Above bottom player controls
+      const ySpan = yForeground - yHorizon;
+      const deltaY = ySpan / numLines;
 
-      // Expansive horizontal active terrain span: 74% of canvas width (13% quiet margins)
-      const xMargin = width * 0.13;
-      const xSpan = width - 2 * xMargin;
+      // Controlled peak amplitude: strictly proportional to line pitch (never pierce >8.5 lines)
+      const maxPeakHeight = deltaY * 8.5;
+      const yCeiling = height * 0.15; // Soft-knee headroom ceiling
 
-      const strokeLineWidth = Math.max(0.75, 0.9 * dpr);
+      // Trapezoidal horizontal perspective: narrower at horizon, wider in foreground
+      const wForeground = width * 0.80;
+      const xCenter = width / 2;
 
       // Render lines from back to front (i = 0 is horizon, i = numLines - 1 is foreground)
       for (let i = 0; i < queue.length; i++) {
         const slice = queue[i];
         if (!slice) continue;
 
-        // Sub-pixel vertical continuous baseline translation
-        const yBase = yHorizon + (i + scrollOffset) * deltaY;
+        const t = i / (numLines - 1); // Depth: 0 (horizon) -> 1 (foreground)
 
-        // Depth perspective envelope:
-        // Far horizon lines (t < 0.22) scale gracefully so they never bunch up at top
-        // Mid-ground lines (t ≈ 0.22 - 0.85) have full towering peak height
-        // Foreground lines (t > 0.85) settle into calm parallel baselines
-        const t = i / (numLines - 1);
-        let depthFactor = 1.0;
-        if (t < 0.22) {
-          depthFactor = 0.50 + 0.50 * Math.sin((t / 0.22) * (Math.PI * 0.5));
-        } else if (t > 0.85) {
-          depthFactor = Math.cos(((t - 0.85) / 0.15) * (Math.PI * 0.5));
-        }
-        const peakScale = maxPeakHeight * depthFactor;
+        // 1. Vertical baseline with perspective compression toward vanishing point
+        const continuousI = (i + scrollOffset) / numLines;
+        const yBase = yHorizon + ySpan * Math.pow(continuousI, 1.12);
 
-        // Available headroom above baseline
-        const availableHeadroom = Math.max(10, yBase - minPeakY);
+        // 2. Trapezoidal width foreshortening
+        const wT = wForeground * (0.76 + 0.24 * t);
+        const xStartT = xCenter - wT / 2;
+
+        // 3. Depth amplitude scaling
+        const peakScale = maxPeakHeight * (0.60 + 0.40 * t);
+
+        // Soft-knee headroom compression
+        const availableHeadroom = Math.max(10, yBase - yCeiling);
 
         const points: { x: number; y: number }[] = [];
         for (let j = 0; j < numPoints; j++) {
           const u = j / (numPoints - 1);
-          const px = xMargin + u * xSpan;
+          const px = xStartT + u * wT;
 
-          // Soft-knee asymptotic compression:
-          // Instead of hard-clamping (which produces an ugly flat horizontal line),
-          // compress smoothly with tanh so peaks remain pointy and acute without ever crossing minPeakY
+          // Asymptotically compress high peaks so they never collide with typography
           const rawDisplacement = slice[j] * peakScale;
           const compressedDisplacement = availableHeadroom * Math.tanh(rawDisplacement / availableHeadroom);
           const py = yBase - compressedDisplacement;
@@ -537,29 +545,25 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
 
         if (points.length < 2) continue;
 
-        const firstX = points[0].x;
-        const lastX = points[points.length - 1].x;
-        const skirtBottom = height + 20 * dpr;
-
         // ---------------------------------------------------------------------
-        // Painter's Occlusion Skirt: Solid Black Fill (#000000)
-        // Extends straight down past canvas baseline to completely hide lines behind
+        // 1. Occlusion Skirt: Solid Black Fill (#000000)
+        // Extends down by 2.2x deltaY to cleanly occlude background lines
         // ---------------------------------------------------------------------
+        const skirtDepth = yBase + deltaY * 2.2;
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
         for (let j = 1; j < numPoints; j++) {
           ctx.lineTo(points[j].x, points[j].y);
         }
-        ctx.lineTo(lastX, skirtBottom);
-        ctx.lineTo(firstX, skirtBottom);
+        ctx.lineTo(points[numPoints - 1].x, skirtDepth);
+        ctx.lineTo(points[0].x, skirtDepth);
         ctx.closePath();
 
         ctx.fillStyle = '#000000';
         ctx.fill();
 
         // ---------------------------------------------------------------------
-        // Crisp Hairline White Contour Stroke
-        // Depth-graded alpha from 0.55 (horizon) to 1.0 (foreground)
+        // 2. Crisp White Contour Stroke
         // ---------------------------------------------------------------------
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
@@ -567,12 +571,10 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
           ctx.lineTo(points[j].x, points[j].y);
         }
 
-        const strokeAlpha = Math.min(1.0, 0.55 + 0.45 * (i / numLines));
-        ctx.strokeStyle = `rgba(255, 255, 255, ${strokeAlpha.toFixed(3)})`;
-        ctx.lineWidth = strokeLineWidth;
-        ctx.lineJoin = 'miter';
-        ctx.miterLimit = 2;
-        ctx.lineCap = 'butt';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(0.85, 1.0 * dpr);
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
         ctx.stroke();
       }
 
