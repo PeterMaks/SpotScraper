@@ -4,7 +4,7 @@ import JoyDivisionVisualizer from '../components/JoyDivisionVisualizer';
 import Icons from '../components/Icons';
 
 export default function VisualizerPage() {
-  const { downloads, currentTrack, handlePlayTrack, handlePlayNext, backendUrl } = useAppContext();
+  const { downloads, currentTrack, handlePlayTrack, handlePlayNext, handlePlayPrev, backendUrl } = useAppContext();
   const [selectedTrack, setSelectedTrack] = useState(null);
 
   const audioTracks = (downloads || []).filter(d => /\.(mp3|m4a|flac|wav|ogg|aac)$/i.test(d.name));
@@ -65,6 +65,8 @@ export default function VisualizerPage() {
           audioSrc={audioSrc}
           albumArtUrl={albumArtUrl}
           onTrackEnd={handlePlayNext}
+          onTrackNext={handlePlayNext}
+          onTrackPrev={handlePlayPrev}
         />
       </div>
     </div>

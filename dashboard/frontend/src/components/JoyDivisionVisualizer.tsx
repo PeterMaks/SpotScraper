@@ -7,6 +7,8 @@ export interface JoyDivisionVisualizerProps {
   audioSrc?: string;
   albumArtUrl?: string;
   onTrackEnd?: () => void;
+  onTrackNext?: () => void;
+  onTrackPrev?: () => void;
   className?: string;
   autoPlay?: boolean;
   fftSize?: number;
@@ -24,10 +26,10 @@ function formatTime(seconds: number): string {
 
 /**
  * Authentic CP 1919 Smooth Raised-Cosine Window:
- * Guarantees that mountain peaks grow naturally from flat parallel baselines
- * without forming abrupt cliff drops or unnatural vertical walls.
+ * Spans the full available line width with subtle smooth edge tapering
+ * to prevent abrupt cliff drops or unnatural clipping.
  */
-function terrainWindow(u: number, uMin = 0.18, uMax = 0.82, taperWidth = 0.11): number {
+function terrainWindow(u: number, uMin = 0.02, uMax = 0.98, taperWidth = 0.03): number {
   if (u < uMin || u > uMax) return 0;
   if (u < uMin + taperWidth) {
     return 0.5 * (1 - Math.cos((Math.PI * (u - uMin)) / taperWidth));
@@ -69,6 +71,8 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   audioSrc = '',
   albumArtUrl,
   onTrackEnd,
+  onTrackNext,
+  onTrackPrev,
   className = '',
   autoPlay = false,
   fftSize = 1024,
@@ -118,6 +122,11 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   const idlePhaseRef = useRef<number>(0);
   const dynamicGainRef = useRef<number>(1.0);
 
+  // 10-Second Idle Timer & Cooldown Tracking
+  const wasAudioActiveRef = useRef<boolean>(false);
+  const pausedAtTimeRef = useRef<number | null>(null);
+  const hasPlayedTrackRef = useRef<boolean>(false);
+
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -129,13 +138,33 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
 
   const activeIsPlaying = appContext ? appContext.isPlaying : isPlaying;
 
+  const handlePrevious = useCallback(() => {
+    if (onTrackPrev) {
+      onTrackPrev();
+    } else if (appContext?.handlePlayPrev) {
+      appContext.handlePlayPrev();
+    } else if (localAudioRef.current) {
+      localAudioRef.current.currentTime = 0;
+    }
+  }, [onTrackPrev, appContext]);
+
+  const handleNext = useCallback(() => {
+    if (onTrackNext) {
+      onTrackNext();
+    } else if (appContext?.handlePlayNext) {
+      appContext.handlePlayNext();
+    } else if (onTrackEnd) {
+      onTrackEnd();
+    }
+  }, [onTrackNext, appContext, onTrackEnd]);
+
   // ---------------------------------------------------------------------------
-  // 1. Initialize FIFO Queue with Authentic Idle Resting Curves
+  // 1. Initialize FIFO Queue with Full-Width Authentic Idle Resting Curves
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const queue: Float32Array[] = [];
-    const uMin = 0.18;
-    const uMax = 0.82;
+    const uMin = 0.02;
+    const uMax = 0.98;
 
     for (let i = 0; i < linesCount; i++) {
       const slice = new Float32Array(pointsPerLine);
@@ -143,20 +172,22 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
 
       for (let j = 0; j < pointsPerLine; j++) {
         const u = j / (pointsPerLine - 1);
-        const env = terrainWindow(u, uMin, uMax, 0.11);
+        const env = terrainWindow(u, uMin, uMax, 0.03);
         if (env <= 0.0001) {
           slice[j] = 0;
           continue;
         }
 
         const r = (u - uMin) / (uMax - uMin);
-        const p1 = Math.exp(-Math.pow((r - 0.26) / 0.13, 2)) * 0.42 * (0.85 + 0.15 * Math.sin(phase * 0.7));
-        const p2 = Math.exp(-Math.pow((r - 0.48) / 0.10, 2)) * 0.46 * (0.85 + 0.15 * Math.cos(phase * 0.9));
-        const p3 = Math.exp(-Math.pow((r - 0.73) / 0.07, 2)) * 0.58 * (0.85 + 0.15 * Math.sin(phase * 1.2));
-        const needle = Math.exp(-Math.pow((r - 0.78) / 0.018, 2)) * 0.54 * (0.85 + 0.15 * Math.cos(phase * 1.4));
-        const serrations = (Math.sin(r * 85 + phase) * 0.5 + 0.5) * 0.06;
+        const p1 = Math.exp(-Math.pow((r - 0.22) / 0.12, 2)) * 0.38 * (0.85 + 0.15 * Math.sin(phase * 0.7));
+        const p2 = Math.exp(-Math.pow((r - 0.42) / 0.10, 2)) * 0.45 * (0.85 + 0.15 * Math.cos(phase * 0.9));
+        const p3 = Math.exp(-Math.pow((r - 0.62) / 0.11, 2)) * 0.52 * (0.85 + 0.15 * Math.sin(phase * 1.1));
+        const p4 = Math.exp(-Math.pow((r - 0.82) / 0.08, 2)) * 0.48 * (0.85 + 0.15 * Math.cos(phase * 1.3));
+        const needle1 = Math.exp(-Math.pow((r - 0.36) / 0.022, 2)) * 0.36 * (0.85 + 0.15 * Math.sin(phase * 1.5));
+        const needle2 = Math.exp(-Math.pow((r - 0.76) / 0.018, 2)) * 0.48 * (0.85 + 0.15 * Math.cos(phase * 1.4));
+        const serrations = (Math.sin(r * 95 + phase) * 0.5 + 0.5) * 0.05;
 
-        slice[j] = (p1 + p2 + p3 + needle + serrations) * env;
+        slice[j] = (p1 + p2 + p3 + p4 + needle1 + needle2 + serrations) * env;
       }
       queue.push(applySpatialFilter(slice));
     }
@@ -223,7 +254,7 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
     return localAnalyserRef.current;
   }, [appContext, fftSize, smoothingTimeConstant]);
 
-  const togglePlayPause = async () => {
+  const togglePlayPause = useCallback(async () => {
     if (appContext && activeAudioRef?.current) {
       const el = activeAudioRef.current;
       appContext.getAnalyserNode();
@@ -261,7 +292,28 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
         console.warn('Local playback error:', err);
       }
     }
-  };
+  }, [appContext, activeAudioRef, isPlaying, getActiveAnalyser]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlayPause();
+      } else if (e.code === 'ArrowRight' && (e.ctrlKey || e.metaKey || e.shiftKey)) {
+        e.preventDefault();
+        handleNext();
+      } else if (e.code === 'ArrowLeft' && (e.ctrlKey || e.metaKey || e.shiftKey)) {
+        e.preventDefault();
+        handlePrevious();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [togglePlayPause, handleNext, handlePrevious]);
 
   const handleScrubberSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     const el = activeAudioRef?.current;
@@ -335,6 +387,17 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
       const analyser = getActiveAnalyser();
       const isAudioActive = appContext ? appContext.isPlaying : isPlaying;
 
+      if (isAudioActive) {
+        hasPlayedTrackRef.current = true;
+        wasAudioActiveRef.current = true;
+        pausedAtTimeRef.current = null;
+      } else {
+        if (wasAudioActiveRef.current) {
+          wasAudioActiveRef.current = false;
+          pausedAtTimeRef.current = timestamp;
+        }
+      }
+
       // 1. Audio Spectral Filtering & Transient Tracking
       if (analyser && isAudioActive) {
         const binCount = analyser.frequencyBinCount;
@@ -369,20 +432,20 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
 
         for (let p = 0; p < pushes; p++) {
           const newSlice = new Float32Array(numPoints);
-          const uMin = 0.18;
-          const uMax = 0.82;
+          const uMin = 0.02;
+          const uMax = 0.98;
 
           if (isAudioActive && smoothedAudioFreqRef.current) {
             const smoothed = smoothedAudioFreqRef.current;
             const binCount = smoothed.length;
             const binMin = 2; // ~86 Hz low-end cutoff
-            const binMax = Math.floor(binCount * 0.80);
+            const binMax = Math.floor(binCount * 0.85);
 
             let maxSliceEnergy = 0.001;
 
             for (let j = 0; j < numPoints; j++) {
               const u = j / (numPoints - 1);
-              const env = terrainWindow(u, uMin, uMax, 0.11);
+              const env = terrainWindow(u, uMin, uMax, 0.03);
               if (env <= 0.0001) {
                 newSlice[j] = 0;
                 continue;
@@ -390,7 +453,7 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
 
               const r = (u - uMin) / (uMax - uMin);
 
-              // Continuous Logarithmic Bin Mapping
+              // Continuous Logarithmic Bin Mapping across full line width
               const logBin = binMin * Math.pow(binMax / binMin, r);
               const low = Math.floor(logBin);
               const high = Math.min(low + 1, binCount - 1);
@@ -398,14 +461,14 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
               const rawAmp = (1 - frac) * smoothed[low] + frac * smoothed[high];
 
               // Noise-floor gate
-              const gated = Math.max(0, (rawAmp - 0.06) / 0.94);
+              const gated = Math.max(0, (rawAmp - 0.05) / 0.95);
 
-              // Pre-emphasis gain: boosts highs and cuts bloated sub-bass
-              const preEmphasis = 0.65 + 2.85 * Math.pow(r, 0.90);
-              const subBassShaping = Math.min(1.0, Math.pow(Math.max(0.01, r / 0.14), 1.2));
+              // Balanced pre-emphasis across the full frequency spectrum
+              const preEmphasis = 0.70 + 2.2 * Math.pow(r, 0.85);
+              const subBassShaping = Math.min(1.0, Math.pow(Math.max(0.01, r / 0.08), 1.1));
 
-              // Power sharpening: deep valleys and acute summits (no flat tops)
-              const val = Math.pow(gated * preEmphasis * subBassShaping, 1.85);
+              // Power sharpening: deep valleys and acute summits
+              const val = Math.pow(gated * preEmphasis * subBassShaping, 1.75);
 
               newSlice[j] = val * env;
               if (newSlice[j] > maxSliceEnergy) {
@@ -414,33 +477,48 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
             }
 
             // Dynamic AGC Peak Tracking: prevents ceiling plateaus while keeping transients tall
-            const targetGain = maxSliceEnergy > 0.05 ? Math.min(1.4, 0.82 / maxSliceEnergy) : 1.0;
+            const targetGain = maxSliceEnergy > 0.05 ? Math.min(1.4, 0.85 / maxSliceEnergy) : 1.0;
             dynamicGainRef.current += (targetGain - dynamicGainRef.current) * 0.12;
 
             for (let j = 0; j < numPoints; j++) {
               newSlice[j] *= dynamicGainRef.current;
             }
           } else {
-            // Authentic Idle Pulsar Waveforms
-            idlePhaseRef.current += 0.04;
-            const phase = idlePhaseRef.current;
+            // Check 10-second timer before idle wave activates after an active song is paused
+            const isPausedCooldown = hasPlayedTrackRef.current && pausedAtTimeRef.current !== null;
+            const pauseElapsed = isPausedCooldown ? timestamp - pausedAtTimeRef.current! : Infinity;
+            const IDLE_COOLDOWN_MS = 10000;
 
-            for (let j = 0; j < numPoints; j++) {
-              const u = j / (numPoints - 1);
-              const env = terrainWindow(u, uMin, uMax, 0.11);
-              if (env <= 0.0001) {
+            if (isPausedCooldown && pauseElapsed < IDLE_COOLDOWN_MS) {
+              // During the 10-second cooldown after pause: keep incoming lines flat
+              for (let j = 0; j < numPoints; j++) {
                 newSlice[j] = 0;
-                continue;
               }
+            } else {
+              // Idle wave activated (either fresh launch or after 10s cooldown)
+              const idleFade = isPausedCooldown ? Math.min(1.0, (pauseElapsed - IDLE_COOLDOWN_MS) / 1500) : 1.0;
+              idlePhaseRef.current += 0.035;
+              const phase = idlePhaseRef.current;
 
-              const r = (u - uMin) / (uMax - uMin);
-              const p1 = Math.exp(-Math.pow((r - 0.26) / 0.13, 2)) * 0.42 * (0.85 + 0.15 * Math.sin(phase * 0.7));
-              const p2 = Math.exp(-Math.pow((r - 0.48) / 0.10, 2)) * 0.46 * (0.85 + 0.15 * Math.cos(phase * 0.9));
-              const p3 = Math.exp(-Math.pow((r - 0.73) / 0.07, 2)) * 0.58 * (0.85 + 0.15 * Math.sin(phase * 1.2));
-              const needle = Math.exp(-Math.pow((r - 0.78) / 0.018, 2)) * 0.54 * (0.85 + 0.15 * Math.cos(phase * 1.4));
-              const serrations = (Math.sin(r * 85 + phase) * 0.5 + 0.5) * 0.06;
+              for (let j = 0; j < numPoints; j++) {
+                const u = j / (numPoints - 1);
+                const env = terrainWindow(u, uMin, uMax, 0.03);
+                if (env <= 0.0001) {
+                  newSlice[j] = 0;
+                  continue;
+                }
 
-              newSlice[j] = (p1 + p2 + p3 + needle + serrations) * env;
+                const r = (u - uMin) / (uMax - uMin);
+                const p1 = Math.exp(-Math.pow((r - 0.22) / 0.12, 2)) * 0.38 * (0.85 + 0.15 * Math.sin(phase * 0.7));
+                const p2 = Math.exp(-Math.pow((r - 0.42) / 0.10, 2)) * 0.45 * (0.85 + 0.15 * Math.cos(phase * 0.9));
+                const p3 = Math.exp(-Math.pow((r - 0.62) / 0.11, 2)) * 0.52 * (0.85 + 0.15 * Math.sin(phase * 1.1));
+                const p4 = Math.exp(-Math.pow((r - 0.82) / 0.08, 2)) * 0.48 * (0.85 + 0.15 * Math.cos(phase * 1.3));
+                const needle1 = Math.exp(-Math.pow((r - 0.36) / 0.022, 2)) * 0.36 * (0.85 + 0.15 * Math.sin(phase * 1.5));
+                const needle2 = Math.exp(-Math.pow((r - 0.76) / 0.018, 2)) * 0.48 * (0.85 + 0.15 * Math.cos(phase * 1.4));
+                const serrations = (Math.sin(r * 95 + phase) * 0.5 + 0.5) * 0.05;
+
+                newSlice[j] = (p1 + p2 + p3 + p4 + needle1 + needle2 + serrations) * env * idleFade;
+              }
             }
           }
 
@@ -456,13 +534,13 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
       // Continuous sub-pixel vertical translation [0, 1]
       const scrollOffset = Math.max(0, Math.min(1.0, (timestamp - lastPushTimeRef.current) / PUSH_INTERVAL_MS));
 
-      // 3. Parallel Baseline Coordinates (Authentic CP 1919 Dimensions)
-      const yHorizon = height * 0.28;
-      const yForeground = height * 0.88;
-      const maxPeakHeight = height * 0.23;
+      // 3. Parallel Baseline Coordinates (Spanning full available width)
+      const yHorizon = height * 0.22;
+      const yForeground = height * 0.86;
+      const maxPeakHeight = height * 0.26;
 
-      // Perfectly parallel horizontal baselines without trapezoidal fanning
-      const xMargin = width * 0.08;
+      // Full-width horizontal baselines without artificial truncation
+      const xMargin = width * 0.04;
       const xSpan = width - 2 * xMargin;
 
       for (let i = 0; i < queue.length; i++) {
@@ -472,11 +550,13 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
         const t = Math.min(1.0, (i + scrollOffset) / numLines);
 
         // Uniform vertical spacing with subtle perspective foreshortening
-        const yBase = yHorizon + (yForeground - yHorizon) * Math.pow(t, 1.16);
+        const yBase = yHorizon + (yForeground - yHorizon) * Math.pow(t, 1.15);
 
-        // Subtle peak foreshortening at the far horizon
-        const depthFactor = 0.65 + 0.35 * Math.sin(t * Math.PI * 0.5);
-        const peakScale = maxPeakHeight * depthFactor;
+        // Waveform degradation / tapering:
+        // At t = 0 (top/point of origin): full amplitude peak
+        // As t -> 1 (bottom): smoothly decays down to 0.0 (normal flat line)
+        const decayFactor = Math.max(0, Math.pow(Math.cos(t * (Math.PI * 0.5)), 1.35));
+        const peakScale = maxPeakHeight * decayFactor;
 
         const points: { x: number; y: number }[] = [];
         for (let j = 0; j < numPoints; j++) {
@@ -511,9 +591,10 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
           ctx.lineTo(points[j].x, points[j].y);
         }
 
-        const strokeAlpha = Math.min(1.0, 0.40 + 0.60 * Math.pow(t, 0.70));
+        // Luminous active peaks at top, delicate minimalist baselines at bottom
+        const strokeAlpha = Math.min(1.0, 0.92 - 0.22 * Math.pow(t, 1.2));
         ctx.strokeStyle = `rgba(255, 255, 255, ${strokeAlpha.toFixed(3)})`;
-        ctx.lineWidth = Math.max(0.65, (0.75 + 0.35 * t) * dpr);
+        ctx.lineWidth = Math.max(0.7, (0.95 - 0.15 * t) * dpr);
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         ctx.stroke();
@@ -637,7 +718,21 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex items-center justify-center gap-3 md:gap-4">
+            {/* Previous Track Button */}
+            <button
+              onClick={handlePrevious}
+              disabled={appContext ? (!appContext.downloads || appContext.downloads.length <= 1) : false}
+              title="Previous Track"
+              aria-label="Previous Track"
+              className="w-9 h-9 rounded-full bg-neutral-900/90 hover:bg-neutral-800 text-neutral-400 hover:text-white active:scale-90 transition-all duration-150 flex items-center justify-center border border-neutral-800 hover:border-neutral-700 disabled:opacity-30 disabled:pointer-events-none cursor-pointer shadow-sm"
+            >
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+              </svg>
+            </button>
+
+            {/* Play / Pause Primary Button */}
             <button
               onClick={togglePlayPause}
               disabled={
@@ -646,6 +741,7 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
                   : !audioSrc
               }
               aria-label={activeIsPlaying ? 'Pause' : 'Play'}
+              title={activeIsPlaying ? 'Pause' : 'Play'}
               className="w-12 h-12 rounded-full bg-white text-black hover:bg-neutral-200 active:scale-95 transition-all duration-150 flex items-center justify-center shadow-lg disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
             >
               {activeIsPlaying ? (
@@ -658,6 +754,19 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
                   <path d="M8 5v14l11-7z" />
                 </svg>
               )}
+            </button>
+
+            {/* Next Track Button */}
+            <button
+              onClick={handleNext}
+              disabled={appContext ? (!appContext.downloads || appContext.downloads.length <= 1) : false}
+              title="Next Track"
+              aria-label="Next Track"
+              className="w-9 h-9 rounded-full bg-neutral-900/90 hover:bg-neutral-800 text-neutral-400 hover:text-white active:scale-90 transition-all duration-150 flex items-center justify-center border border-neutral-800 hover:border-neutral-700 disabled:opacity-30 disabled:pointer-events-none cursor-pointer shadow-sm"
+            >
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+              </svg>
             </button>
           </div>
 
