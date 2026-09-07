@@ -33,7 +33,7 @@ export default function DetailedLogs() {
       const raf = requestAnimationFrame(update);
       return () => cancelAnimationFrame(raf);
     }
-  }, [logsFilter, logs]);
+  }, [logsFilter]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -53,7 +53,12 @@ export default function DetailedLogs() {
     return () => window.removeEventListener('resize', handleResize);
   }, [logsFilter]);
 
-  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+  // ponytail: fetch once on mount if empty; manual Refresh Logs button handles on-demand reload
+  useEffect(() => {
+    if (!logs?.downloadLinks || Object.keys(logs.downloadLinks).length === 0) {
+      fetchLogs();
+    }
+  }, []);
 
   const getLogsList = () => {
     const list = [];

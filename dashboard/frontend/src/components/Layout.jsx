@@ -232,6 +232,7 @@ export default function Layout() {
           {/* Global Audio Player */}
           <audio
             ref={audioRef}
+            crossOrigin="anonymous"
             preload="auto"
             onCanPlay={() => {
               if (pendingPlayRef.current) {
@@ -247,7 +248,7 @@ export default function Layout() {
             onEnded={handlePlayNext}
           />
 
-          {currentTrack && (
+          {currentTrack && location.pathname !== '/visualizer' && (
             <div
               style={{
                 opacity: playerVisible ? 1 : 0,

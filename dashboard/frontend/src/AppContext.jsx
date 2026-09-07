@@ -1,5 +1,5 @@
 // @refresh reset
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 
 const AppContext = createContext();
 
@@ -45,7 +45,39 @@ export const AppProvider = ({ children }) => {
   const [volume, setVolume] = useState(1);
   const audioRef = useRef(null);
   const pendingPlayRef = useRef(false);
-  // timeUpdateRAF removed for direct DOM updates
+
+  // Web Audio Shared Analyser Node
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const sourceNodeRef = useRef(null);
+
+  const getAnalyserNode = useCallback(() => {
+    if (!audioRef.current) return null;
+    if (!audioCtxRef.current) {
+      const AudioCtx = window.AudioContext || (window).webkitAudioContext;
+      if (!AudioCtx) return null;
+      const ctx = new AudioCtx();
+      audioCtxRef.current = ctx;
+
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.78;
+      analyserRef.current = analyser;
+
+      try {
+        const source = ctx.createMediaElementSource(audioRef.current);
+        sourceNodeRef.current = source;
+        source.connect(analyser);
+        analyser.connect(ctx.destination);
+      } catch (e) {
+        console.warn('Could not connect audio to Web Audio analyser:', e);
+      }
+    }
+    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume().catch(() => {});
+    }
+    return analyserRef.current;
+  }, []);
 
   // Search/Filters
   const [dashSearch, setDashSearch] = useState('');
@@ -98,8 +130,7 @@ export const AppProvider = ({ children }) => {
       }
       
       setUploadStatus(`Successfully uploaded ${successCount} file(s).`);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchStats();
+      fetchStats();
     } catch (err) {
       console.error(err);
       setUploadStatus(`Upload failed: ${err.message}`);
@@ -175,8 +206,6 @@ export const AppProvider = ({ children }) => {
     setIsPlaying(true);
   };
 
-  // handleTimeUpdate removed for direct DOM updates
-
   const handleLoadedMetadata = () => {
     if (audioRef.current) setDuration(audioRef.current.duration);
   };
@@ -192,7 +221,7 @@ export const AppProvider = ({ children }) => {
     if (audioRef.current) audioRef.current.volume = vol;
   };
 
-  const fetchSources = async () => {
+  const fetchSources = useCallback(async () => {
     try {
       const res = await fetch(`${backendUrl}/api/sources`);
       const data = await res.json();
@@ -200,9 +229,9 @@ export const AppProvider = ({ children }) => {
     } catch (err) {
       console.error('Error fetching sources:', err);
     }
-  };
+  }, [backendUrl]);
 
-  const fetchAppleStats = async () => {
+  const fetchAppleStats = useCallback(async () => {
     setLoadingAppleStats(true);
     try {
       const res = await fetch(`${backendUrl}/api/apple/stats`);
@@ -213,9 +242,9 @@ export const AppProvider = ({ children }) => {
     } finally {
       setLoadingAppleStats(false);
     }
-  };
+  }, [backendUrl]);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     setLoadingStats(true);
     try {
       const res = await fetch(`${backendUrl}/api/stats`);
@@ -226,9 +255,9 @@ export const AppProvider = ({ children }) => {
     } finally {
       setLoadingStats(false);
     }
-  };
+  }, [backendUrl]);
 
-  const fetchDownloads = async () => {
+  const fetchDownloads = useCallback(async () => {
     setLoadingDownloads(true);
     try {
       const res = await fetch(`${backendUrl}/api/downloads?_t=${Date.now()}`);
@@ -239,9 +268,10 @@ export const AppProvider = ({ children }) => {
     } finally {
       setLoadingDownloads(false);
     }
-  };
+  }, [backendUrl]);
 
-  const fetchLogs = async () => {
+  // ponytail: memoized fetchLogs avoids recreating function identity on every render
+  const fetchLogs = useCallback(async () => {
     try {
       setLoadingLogs(true);
       const res = await fetch(`${backendUrl}/api/logs?_t=${Date.now()}`, {
@@ -257,9 +287,9 @@ export const AppProvider = ({ children }) => {
     } finally {
       setLoadingLogs(false);
     }
-  };
+  }, [backendUrl]);
 
-  const checkScraperStatus = async () => {
+  const checkScraperStatus = useCallback(async () => {
     try {
       const res = await fetch(`${backendUrl}/api/scrape/status`);
       const data = await res.json();
@@ -269,9 +299,9 @@ export const AppProvider = ({ children }) => {
     } catch (err) {
       console.error('Error checking scraper status:', err);
     }
-  };
+  }, [backendUrl]);
 
-  const pollScraperStatus = async () => {
+  const pollScraperStatus = useCallback(async () => {
     try {
       const res = await fetch(`${backendUrl}/api/scrape/status`);
       const data = await res.json();
@@ -293,7 +323,7 @@ export const AppProvider = ({ children }) => {
     } catch (err) {
       console.error('Error polling status:', err);
     }
-  };
+  }, [backendUrl, fetchStats, fetchDownloads, fetchLogs]);
 
   useEffect(() => {
     fetchStats();
@@ -306,7 +336,7 @@ export const AppProvider = ({ children }) => {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, []);
+  }, [fetchStats, fetchAppleStats, fetchDownloads, fetchLogs, fetchSources, checkScraperStatus]);
 
   useEffect(() => {
     if (scraperStatus === 'running') {
@@ -319,7 +349,7 @@ export const AppProvider = ({ children }) => {
         pollIntervalRef.current = null;
       }
     }
-  }, [scraperStatus]);
+  }, [scraperStatus, pollScraperStatus]);
 
   const value = {
     stats, setStats, loadingStats, fetchStats,
@@ -348,6 +378,7 @@ export const AppProvider = ({ children }) => {
     duration, setDuration,
     volume, setVolume,
     audioRef, pendingPlayRef,
+    getAnalyserNode,
     handlePlayTrack, handlePlayNext, handlePlayPrev,
     handleLoadedMetadata, handleSeek, handleVolumeChange,
     backendUrl

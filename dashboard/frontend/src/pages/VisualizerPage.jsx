@@ -4,7 +4,7 @@ import JoyDivisionVisualizer from '../components/JoyDivisionVisualizer';
 import Icons from '../components/Icons';
 
 export default function VisualizerPage() {
-  const { downloads, currentTrack, backendUrl } = useAppContext();
+  const { downloads, currentTrack, handlePlayTrack, handlePlayNext, backendUrl } = useAppContext();
   const [selectedTrack, setSelectedTrack] = useState(null);
 
   const audioTracks = (downloads || []).filter(d => /\.(mp3|m4a|flac|wav|ogg|aac)$/i.test(d.name));
@@ -19,13 +19,14 @@ export default function VisualizerPage() {
     }
   }, [currentTrack, downloads]);
 
-  const cleanName = selectedTrack?.name ? selectedTrack.name.replace(/\.[^/.]+$/, '') : 'Disorder';
-  const trackTitle = selectedTrack?.title || cleanName;
-  const artistName = selectedTrack?.artist && selectedTrack.artist !== 'Unknown Artist' && selectedTrack.artist !== 'Unknown (Local Cache)'
-    ? selectedTrack.artist
-    : (cleanName.toLowerCase().includes('disorder') ? 'Joy Division' : (selectedTrack?.artist || 'Joy Division'));
-  const audioSrc = selectedTrack?.name ? `${backendUrl}/api/downloads/file/${encodeURIComponent(selectedTrack.name)}` : '';
-  const albumArtUrl = selectedTrack?.name ? `${backendUrl}/api/downloads/art/${encodeURIComponent(selectedTrack.name)}` : '';
+  const cleanName = (currentTrack || selectedTrack)?.name ? (currentTrack || selectedTrack).name.replace(/\.[^/.]+$/, '') : 'Disorder';
+  const trackTitle = (currentTrack || selectedTrack)?.title || cleanName;
+  const artistName = (currentTrack || selectedTrack)?.artist && (currentTrack || selectedTrack).artist !== 'Unknown Artist' && (currentTrack || selectedTrack).artist !== 'Unknown (Local Cache)'
+    ? (currentTrack || selectedTrack).artist
+    : (cleanName.toLowerCase().includes('disorder') ? 'Joy Division' : ((currentTrack || selectedTrack)?.artist || 'Joy Division'));
+  const activeTrackName = (currentTrack || selectedTrack)?.name || '';
+  const audioSrc = activeTrackName ? `${backendUrl}/api/downloads/file/${encodeURIComponent(activeTrackName)}` : '';
+  const albumArtUrl = activeTrackName ? `${backendUrl}/api/downloads/art/${encodeURIComponent(activeTrackName)}` : '';
 
   return (
     <div className="min-h-screen py-4 flex flex-col items-center justify-center animate-in fade-in duration-300">
@@ -35,10 +36,13 @@ export default function VisualizerPage() {
           <div className="flex items-center gap-2 bg-neutral-900/80 backdrop-blur-md border border-neutral-800 rounded-full px-3 py-1.5 shadow-lg">
             <Icons.Music className="size-3.5 text-neutral-400" />
             <select
-              value={selectedTrack?.name || ''}
+              value={activeTrackName}
               onChange={(e) => {
                 const found = audioTracks.find(d => d.name === e.target.value);
-                if (found) setSelectedTrack(found);
+                if (found) {
+                  setSelectedTrack(found);
+                  handlePlayTrack(found);
+                }
               }}
               aria-label="Select Track"
               className="bg-transparent border-0 text-neutral-300 text-xs font-mono focus:outline-none cursor-pointer max-w-[260px] truncate"
@@ -60,13 +64,7 @@ export default function VisualizerPage() {
           artistName={artistName}
           audioSrc={audioSrc}
           albumArtUrl={albumArtUrl}
-          onTrackEnd={() => {
-            if (downloads && downloads.length > 1 && selectedTrack) {
-              const idx = downloads.findIndex(d => d.name === selectedTrack.name);
-              const nextIdx = (idx + 1) % downloads.length;
-              setSelectedTrack(downloads[nextIdx]);
-            }
-          }}
+          onTrackEnd={handlePlayNext}
         />
       </div>
     </div>

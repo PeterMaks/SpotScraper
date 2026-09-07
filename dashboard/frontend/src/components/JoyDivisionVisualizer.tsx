@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useAppContext } from '../AppContext';
 
 /**
  * Props for the JoyDivisionVisualizer component.
@@ -20,11 +21,11 @@ export interface JoyDivisionVisualizerProps {
   autoPlay?: boolean;
   /** FFT Size for Web Audio AnalyserNode (default: 512) */
   fftSize?: number;
-  /** AnalyserNode smoothing time constant (default: 0.78 for sharp transient response) */
+  /** AnalyserNode smoothing time constant (default: 0.75 for crisp transient attacks) */
   smoothingTimeConstant?: number;
-  /** Number of dense ridgeline slices stacked in the waterfall queue (default: 140) */
+  /** Number of stacked ridgeline slices (authentic CP 1919 default: 80 pulses) */
   linesCount?: number;
-  /** Number of horizontal sample points along each ridgeline (default: 260) */
+  /** Number of horizontal sample points along each ridgeline (default: 280) */
   pointsPerLine?: number;
 }
 
@@ -39,16 +40,169 @@ function formatTime(seconds: number): string {
 }
 
 /**
+ * Modified Tukey (tapered cosine) envelope:
+ * W(u) = 0 for u < uMin or u > uMax
+ * Raised cosine taper on boundaries
+ * Flat 1.0 in the center plateau
+ */
+function tukeyWindow(u: number, uMin = 0.20, uMax = 0.80, wTaper = 0.08): number {
+  if (u < uMin || u > uMax) return 0;
+  if (u < uMin + wTaper) {
+    return 0.5 * (1 - Math.cos((Math.PI * (u - uMin)) / wTaper));
+  }
+  if (u > uMax - wTaper) {
+    return 0.5 * (1 - Math.cos((Math.PI * (uMax - u)) / wTaper));
+  }
+  return 1.0;
+}
+
+interface AudioBands {
+  subBass: number;
+  bass: number;
+  mid: number;
+  high: number;
+}
+
+/**
+ * Process raw frequency bins with pre-emphasis G(k) = (k/kMax)^0.65 to equalize
+ * treble needles against bass dominance, extract 4 distinct spectral bands,
+ * and apply non-linear power sharpening A^2.2 to enforce sharp, acute summits.
+ */
+function extractAudioBands(rawData: Uint8Array, binCount: number, sampleRate = 44100): AudioBands {
+  const binHz = (sampleRate / 2) / binCount;
+  const kMax = Math.min(binCount - 1, Math.max(10, Math.floor(12000 / binHz)));
+
+  let subBassSum = 0, subBassCount = 0;
+  let bassSum = 0, bassCount = 0;
+  let midSum = 0, midCount = 0;
+  let highSum = 0, highCount = 0;
+
+  for (let k = 0; k < binCount; k++) {
+    const freq = k * binHz;
+    if (freq > 14000) break;
+
+    // Frequency-dependent pre-emphasis gain scaling G(k) = (k / kMax)^0.65
+    const preEmphasis = Math.pow(Math.min(1.0, Math.max(0.01, k / kMax)), 0.65);
+    const normalized = rawData[k] / 255.0;
+    // Scale normalized byte value: low frequencies get ~0.65x, highs get up to ~3.8x
+    const weightedVal = normalized * (0.65 + 3.15 * preEmphasis);
+
+    if (freq <= 120) {
+      subBassSum += weightedVal;
+      subBassCount++;
+    } else if (freq <= 500) {
+      bassSum += weightedVal;
+      bassCount++;
+    } else if (freq <= 3000) {
+      midSum += weightedVal;
+      midCount++;
+    } else if (freq <= 12000) {
+      highSum += weightedVal;
+      highCount++;
+    }
+  }
+
+  const subBassAvg = subBassCount > 0 ? subBassSum / subBassCount : 0;
+  const bassAvg = bassCount > 0 ? bassSum / bassCount : 0;
+  const midAvg = midCount > 0 ? midSum / midCount : 0;
+  const highAvg = highCount > 0 ? highSum / highCount : 0;
+
+  // Power sharpening A_sharp = A^2.2 on normalized amplitudes to enforce acute summits
+  return {
+    subBass: Math.min(1.0, Math.pow(Math.min(1.0, subBassAvg * 1.35), 2.2)),
+    bass: Math.min(1.0, Math.pow(Math.min(1.0, bassAvg * 1.35), 2.2)),
+    mid: Math.min(1.0, Math.pow(Math.min(1.0, midAvg * 1.40), 2.2)),
+    high: Math.min(1.0, Math.pow(Math.min(1.0, highAvg * 1.45), 2.2)),
+  };
+}
+
+/**
+ * Synthesize a single CP 1919 horizontal slice matching the authentic Unknown Pleasures artwork:
+ * - Quiet flat baselines on flanks outside [uMin, uMax]
+ * - Resonant mountain peaks across left-center (driven by sub-bass & bass)
+ * - Central pyramid towers (driven by low-mid & mid)
+ * - Sharp serrated needle spikes across right-center (driven by presence & high-end)
+ * - High-frequency procedural craggy serrations (sub-pulse drifting)
+ */
+function synthesizeSlice(
+  numPoints: number,
+  phase: number,
+  bands: AudioBands | null,
+  isAudioActive: boolean
+): Float32Array {
+  const slice = new Float32Array(numPoints);
+  const uMin = 0.20;
+  const uMax = 0.80;
+  const wTaper = 0.08;
+
+  for (let j = 0; j < numPoints; j++) {
+    const u = j / (numPoints - 1);
+    const W = tukeyWindow(u, uMin, uMax, wTaper);
+
+    // Outside active region: strictly flat baseline displacement with subtle radio static <= 0.0015
+    if (W <= 0.0001) {
+      slice[j] = (Math.random() - 0.5) * 0.0015;
+      continue;
+    }
+
+    const relU = (u - uMin) / (uMax - uMin); // [0, 1] within pulse window
+
+    if (isAudioActive && bands) {
+      // 1. Sub-pulse carrier centers matching CP 1919 morphology
+      const p1 = Math.exp(-Math.pow((relU - 0.26) / 0.12, 2)) * (bands.subBass * 0.85 + bands.bass * 0.45) * 1.35;
+      const p2 = Math.exp(-Math.pow((relU - 0.48) / 0.10, 2)) * (bands.bass * 0.45 + bands.mid * 0.85) * 1.15;
+      const p3 = Math.exp(-Math.pow((relU - 0.72) / 0.08, 2)) * (bands.mid * 0.40 + bands.high * 0.90) * 1.40;
+
+      // Signature CP 1919 razor needle spike at relU ~ 0.78
+      const pNeedle = Math.exp(-Math.pow((relU - 0.78) / 0.022, 2)) * bands.high * 0.85;
+
+      // High-frequency craggy serrations (jagged needle teeth matching radio scintillation and dispersion)
+      const serration =
+        (Math.sin(relU * 85 + phase) * 0.5 + 0.5) * (bands.mid * 0.25 + bands.high * 0.35) * 0.38 +
+        (Math.sin(relU * 160 - phase * 1.4) * 0.5 + 0.5) * bands.high * 0.24 +
+        (Math.sin(relU * 240 + phase * 2.1) * 0.5 + 0.5) * bands.high * 0.12;
+
+      // Subtle resting floor so mountains stay organic during quiet breaks
+      const subtleFloor = 
+        Math.exp(-Math.pow((relU - 0.26) / 0.12, 2)) * 0.06 +
+        Math.exp(-Math.pow((relU - 0.48) / 0.10, 2)) * 0.06 +
+        Math.exp(-Math.pow((relU - 0.72) / 0.08, 2)) * 0.08;
+
+      const staticNoise = (Math.random() - 0.5) * 0.002;
+
+      slice[j] = Math.max(0, (p1 + p2 + p3 + pNeedle + serration + subtleFloor) * W + staticNoise);
+    } else {
+      // Authentic resting CP 1919 pulsar signal with subtle micro-drifts
+      const idleP1 = Math.exp(-Math.pow((relU - 0.26) / 0.12, 2)) * 0.42 * (0.85 + 0.15 * Math.sin(phase * 0.65));
+      const idleP2 = Math.exp(-Math.pow((relU - 0.48) / 0.10, 2)) * 0.46 * (0.85 + 0.15 * Math.cos(phase * 0.85));
+      const idleP3 = Math.exp(-Math.pow((relU - 0.72) / 0.08, 2)) * 0.58 * (0.85 + 0.15 * Math.sin(phase * 1.15));
+      const idleNeedle = Math.exp(-Math.pow((relU - 0.78) / 0.022, 2)) * 0.48 * (0.85 + 0.15 * Math.cos(phase * 1.35));
+
+      const idleSerration =
+        (Math.sin(relU * 85 + phase * 1.1) * 0.5 + 0.5) * 0.10 +
+        (Math.sin(relU * 160 - phase * 1.5) * 0.5 + 0.5) * 0.06 +
+        (Math.sin(relU * 240 + phase * 2.0) * 0.5 + 0.5) * 0.03;
+
+      const idleStatic = (Math.random() - 0.5) * 0.002;
+
+      slice[j] = Math.max(0, (idleP1 + idleP2 + idleP3 + idleNeedle + idleSerration) * W + idleStatic);
+    }
+  }
+
+  return slice;
+}
+
+/**
  * JoyDivisionVisualizer
  *
- * Production-grade Web Audio & Canvas visualizer combining:
- * 1. Full ergonomic player layout (rich controls, scrubber, album art, volume).
- * 2. Authentic CP 1919 Pulsar ridgeline curve synthesis matching the Unknown Pleasures artwork:
- *    - 140 dense horizontal contour bands.
- *    - Acute, sharp mountain spikes on the left and mid-left.
- *    - Distinct tall needle peak on the right.
- *    - Tight dense foreground bands with subtle rolling baseline undulations.
- *    - Painter's algorithm (#000000 occlusion skirt fill) and crisp hairline white contour strokes.
+ * Production-grade Web Audio & Canvas visualizer recreating the authentic PSR B1919 / CP 1919
+ * pulsar radio data plot from Unknown Pleasures:
+ * - 80 dense isometric ridgeline pulses (Harold Craft Jr., 1970 Cornell thesis).
+ * - Central Tukey pulse windowing (u in [0.20, 0.80]) with flat quiet baseline flanks.
+ * - Decoupled queue cadence (26 Hz) with sub-pixel vertical interpolation for continuous 60/120 FPS waterfall.
+ * - Audio spectral pre-emphasis G(k) = (k/kMax)^0.65 and 4-band acute peak sharpening.
+ * - Procedural jagged needle harmonics replicating pulsar sub-pulse drifting.
+ * - Authentic idle state undulations and painter's algorithm occlusion skirt.
  */
 export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   trackTitle = 'Disorder',
@@ -59,29 +213,55 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   className = '',
   autoPlay = false,
   fftSize = 512,
-  smoothingTimeConstant = 0.78,
-  linesCount = 140,
-  pointsPerLine = 260,
+  smoothingTimeConstant = 0.75,
+  linesCount = 80,
+  pointsPerLine = 280,
 }) => {
-  // --- DOM & Audio Node References ---
+  let appContext: ReturnType<typeof useAppContext> | null = null;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    appContext = useAppContext();
+  } catch {
+    appContext = null;
+  }
+
+  // --- Active track metadata (synced with global player when present) ---
+  const activeTitle =
+    appContext?.currentTrack?.title ||
+    (appContext?.currentTrack?.name ? appContext.currentTrack.name.replace(/\.[^/.]+$/, '') : trackTitle) ||
+    'Disorder';
+  const activeArtist =
+    appContext?.currentTrack?.artist &&
+    appContext.currentTrack.artist !== 'Unknown Artist' &&
+    appContext.currentTrack.artist !== 'Unknown (Local Cache)'
+      ? appContext.currentTrack.artist
+      : activeTitle.toLowerCase().includes('disorder')
+      ? 'Joy Division'
+      : artistName || 'Joy Division';
+  const activeAlbumArt = appContext?.currentTrack?.name
+    ? `${appContext.backendUrl}/api/downloads/art/${encodeURIComponent(appContext.currentTrack.name)}`
+    : albumArtUrl;
+
+  // --- DOM & Audio References ---
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const localAudioRef = useRef<HTMLAudioElement | null>(null);
+  const activeAudioRef = appContext ? appContext.audioRef : localAudioRef;
   const progressBarRef = useRef<HTMLDivElement | null>(null);
 
-  // --- Web Audio Graph References ---
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
+  // --- Standalone Web Audio References (only used if outside AppContext) ---
+  const localAudioCtxRef = useRef<AudioContext | null>(null);
+  const localAnalyserRef = useRef<AnalyserNode | null>(null);
+  const localSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
 
-  // --- Animation & Data Buffers ---
+  // --- Animation, Timing & Data Buffers ---
   const animationFrameIdRef = useRef<number | null>(null);
   const rawFreqDataRef = useRef<Uint8Array | null>(null);
   const lineQueueRef = useRef<Float32Array[]>([]);
-  const idlePhaseRef = useRef<number>(0);
+  const lastPushTimeRef = useRef<number>(0);
+  const phaseRef = useRef<number>(0);
 
-  // --- Player State (UI only) ---
+  // --- Player State ---
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -91,111 +271,133 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   const [hoverTime, setHoverTime] = useState<number>(0);
   const [hoverPosition, setHoverPosition] = useState<number>(0);
 
+  const activeIsPlaying = appContext ? appContext.isPlaying : isPlaying;
+
   // ---------------------------------------------------------------------------
-  // 1. Initialize FIFO Ridgeline Queue
+  // 1. Initialize FIFO Ridgeline Queue with Authentic Baseline Pulsar Terrain
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const queue: Float32Array[] = [];
     for (let i = 0; i < linesCount; i++) {
-      queue.push(new Float32Array(pointsPerLine));
+      // Pre-populate with cascading idle slices so the plot is immediately full
+      const initialPhase = (linesCount - 1 - i) * 0.12;
+      const slice = synthesizeSlice(pointsPerLine, initialPhase, null, false);
+      queue.push(slice);
     }
     lineQueueRef.current = queue;
+    lastPushTimeRef.current = 0;
   }, [linesCount, pointsPerLine]);
 
   // ---------------------------------------------------------------------------
-  // 2. Initialize Web Audio API Graph
+  // 2. Synchronize with Active Audio Element (time, duration, ended)
   // ---------------------------------------------------------------------------
-  const initAudioGraph = useCallback(() => {
-    if (!audioRef.current) return;
+  useEffect(() => {
+    const el = activeAudioRef?.current;
+    if (!el) return;
 
-    if (!audioCtxRef.current) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const onTime = () => setCurrentTime(el.currentTime);
+    const onMeta = () => setDuration(el.duration || 0);
+    const onEnd = () => {
+      if (onTrackEnd) onTrackEnd();
+      else if (appContext?.handlePlayNext) appContext.handlePlayNext();
+    };
+
+    el.addEventListener('timeupdate', onTime);
+    el.addEventListener('loadedmetadata', onMeta);
+    el.addEventListener('ended', onEnd);
+    if (el.duration) setDuration(el.duration);
+    if (el.currentTime) setCurrentTime(el.currentTime);
+
+    return () => {
+      el.removeEventListener('timeupdate', onTime);
+      el.removeEventListener('loadedmetadata', onMeta);
+      el.removeEventListener('ended', onEnd);
+    };
+  }, [activeAudioRef, onTrackEnd, appContext]);
+
+  // ---------------------------------------------------------------------------
+  // 3. Web Audio Analyser Access
+  // ---------------------------------------------------------------------------
+  const getActiveAnalyser = useCallback((): AnalyserNode | null => {
+    if (appContext?.getAnalyserNode) {
+      return appContext.getAnalyserNode();
+    }
+    if (!localAudioRef.current) return null;
+    if (!localAudioCtxRef.current) {
+      const AudioCtx =
+        window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new AudioCtx();
-      audioCtxRef.current = ctx;
+      localAudioCtxRef.current = ctx;
 
       const analyser = ctx.createAnalyser();
       analyser.fftSize = fftSize;
       analyser.smoothingTimeConstant = smoothingTimeConstant;
-      analyserRef.current = analyser;
+      localAnalyserRef.current = analyser;
 
-      const gain = ctx.createGain();
-      gain.gain.value = isMuted ? 0 : volume;
-      gainNodeRef.current = gain;
-
-      if (!sourceNodeRef.current) {
-        const source = ctx.createMediaElementSource(audioRef.current);
-        sourceNodeRef.current = source;
+      if (!localSourceRef.current) {
+        const source = ctx.createMediaElementSource(localAudioRef.current);
+        localSourceRef.current = source;
         source.connect(analyser);
-        analyser.connect(gain);
-        gain.connect(ctx.destination);
+        analyser.connect(ctx.destination);
       }
-
-      rawFreqDataRef.current = new Uint8Array(analyser.frequencyBinCount);
     }
-
-    if (audioCtxRef.current.state === 'suspended') {
-      audioCtxRef.current.resume();
+    if (localAudioCtxRef.current.state === 'suspended') {
+      localAudioCtxRef.current.resume().catch(() => {});
     }
-  }, [fftSize, smoothingTimeConstant, volume, isMuted]);
-
-  useEffect(() => {
-    if (gainNodeRef.current && audioCtxRef.current) {
-      gainNodeRef.current.gain.setTargetAtTime(isMuted ? 0 : volume, audioCtxRef.current.currentTime, 0.03);
-    }
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume;
-    }
-  }, [volume, isMuted]);
+    return localAnalyserRef.current;
+  }, [appContext, fftSize, smoothingTimeConstant]);
 
   // ---------------------------------------------------------------------------
-  // 3. Audio Element Playback Controls
+  // 4. Playback Controls (Connected to Global Player or Local Element)
   // ---------------------------------------------------------------------------
   const togglePlayPause = async () => {
-    if (!audioRef.current) return;
-
-    initAudioGraph();
-
-    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-      await audioCtxRef.current.resume();
+    if (appContext && activeAudioRef?.current) {
+      const el = activeAudioRef.current;
+      appContext.getAnalyserNode(); // ensure active
+      if (appContext.isPlaying) {
+        el.pause();
+        appContext.setIsPlaying(false);
+      } else {
+        if (!appContext.currentTrack && appContext.downloads && appContext.downloads.length > 0) {
+          appContext.handlePlayTrack(appContext.downloads[0]);
+        } else {
+          try {
+            await el.play();
+            appContext.setIsPlaying(true);
+          } catch (err) {
+            console.warn('Playback error:', err);
+          }
+        }
+      }
+      return;
     }
 
+    if (!localAudioRef.current) return;
+    getActiveAnalyser();
+    if (localAudioCtxRef.current && localAudioCtxRef.current.state === 'suspended') {
+      await localAudioCtxRef.current.resume();
+    }
     if (isPlaying) {
-      audioRef.current.pause();
+      localAudioRef.current.pause();
       setIsPlaying(false);
     } else {
       try {
-        await audioRef.current.play();
+        await localAudioRef.current.play();
         setIsPlaying(true);
       } catch (err) {
-        console.warn('Playback initiation prevented by browser policy:', err);
+        console.warn('Local playback error:', err);
       }
     }
   };
 
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
-  };
-
-  const handleLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration || 0);
-    }
-  };
-
-  const handleAudioEnded = () => {
-    setIsPlaying(false);
-    if (onTrackEnd) onTrackEnd();
-  };
-
   const handleScrubberSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!audioRef.current || !progressBarRef.current || !duration) return;
+    const el = activeAudioRef?.current;
+    if (!el || !progressBarRef.current || !duration) return;
     const rect = progressBarRef.current.getBoundingClientRect();
     const clickX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
     const targetPercent = clickX / rect.width;
     const targetTime = targetPercent * duration;
-    audioRef.current.currentTime = targetTime;
+    el.currentTime = targetTime;
     setCurrentTime(targetTime);
   };
 
@@ -214,7 +416,7 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
   };
 
   // ---------------------------------------------------------------------------
-  // 4. Canvas Render Loop: Authentic Unknown Pleasures Curves
+  // 5. Canvas Render Loop: Decoupled Queue Cadence & Sub-Pixel Interpolation
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -224,6 +426,7 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
     if (!ctx) return;
 
     let isRunning = true;
+    const PUSH_INTERVAL_MS = 38.5; // ~26 Hz update cadence (within 24-28 Hz specification)
 
     const updateCanvasDimensions = () => {
       if (!canvas || !containerRef.current) return;
@@ -247,7 +450,7 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
     }
     updateCanvasDimensions();
 
-    const renderFrame = () => {
+    const renderFrame = (timestamp: number) => {
       if (!isRunning) return;
 
       const dpr = window.devicePixelRatio || 1;
@@ -260,207 +463,111 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
 
       const numLines = linesCount;
       const numPoints = pointsPerLine;
-      const currentSlice = new Float32Array(numPoints);
-
-      const analyser = analyserRef.current;
-      const rawData = rawFreqDataRef.current;
-
-      if (analyser && rawData && isPlaying) {
-        analyser.getByteFrequencyData(rawData);
-
-        const binCount = analyser.frequencyBinCount;
-        const minBin = 1;
-        const maxBin = Math.floor(binCount * 0.92);
-
-        for (let j = 0; j < numPoints; j++) {
-          const u = j / (numPoints - 1);
-
-          // Logarithmic bin interpolation across spectrum
-          const logBin = minBin * Math.pow(maxBin / minBin, u);
-          const lowIndex = Math.floor(logBin);
-          const highIndex = Math.min(lowIndex + 1, binCount - 1);
-          const interp = logBin - lowIndex;
-
-          const rawVal = (1 - interp) * rawData[lowIndex] + interp * rawData[highIndex];
-          let normalizedAmp = rawVal / 255.0;
-
-          // Non-linear power sharpening for acute pointy peaks
-          normalizedAmp = Math.pow(normalizedAmp, 1.85);
-
-          // Smooth edge tapering so lines anchor cleanly to left/right baselines
-          const taperWidth = 0.05;
-          let envelope = 1.0;
-          if (u < taperWidth) {
-            envelope = 0.5 * (1 - Math.cos((u / taperWidth) * Math.PI));
-          } else if (u > 1.0 - taperWidth) {
-            envelope = 0.5 * (1 - Math.cos(((1.0 - u) / taperWidth) * Math.PI));
-          }
-
-          // CP 1919 Regional weighting:
-          // Left: resonant bass mountain range
-          // Center: mid-range pyramid peaks
-          // Right: sharp treble needle spikes and serrations
-          let regionalWeight = 1.0;
-          if (u < 0.35) {
-            regionalWeight = 1.15 + 0.3 * Math.sin((u / 0.35) * Math.PI);
-          } else if (u < 0.60) {
-            regionalWeight = 0.95 + 0.35 * Math.sin(((u - 0.35) / 0.25) * Math.PI * 2);
-          } else {
-            // Accentuate the signature tall spike on the right
-            const needleBoost = Math.exp(-Math.pow((u - 0.86) / 0.02, 2)) * 1.5;
-            regionalWeight = 0.75 + 0.45 * Math.sin(u * 110) + needleBoost;
-          }
-
-          currentSlice[j] = normalizedAmp * envelope * regionalWeight;
-        }
-
-        // Spatial peak accentuation on localized maxima
-        for (let j = 1; j < numPoints - 1; j++) {
-          if (currentSlice[j] > currentSlice[j - 1] && currentSlice[j] > currentSlice[j + 1]) {
-            currentSlice[j] = Math.min(1.0, currentSlice[j] * 1.4);
-          }
-        }
-      } else {
-        // Ambient Idle State: Exact CP 1919 Pulsar Waterfall Harmonics matching the reference image
-        idlePhaseRef.current += 0.022;
-        const phase = idlePhaseRef.current;
-
-        for (let j = 0; j < numPoints; j++) {
-          const u = j / (numPoints - 1);
-          const taperWidth = 0.05;
-          let envelope = 1.0;
-          if (u < taperWidth) {
-            envelope = 0.5 * (1 - Math.cos((u / taperWidth) * Math.PI));
-          } else if (u > 1.0 - taperWidth) {
-            envelope = 0.5 * (1 - Math.cos(((1.0 - u) / taperWidth) * Math.PI));
-          }
-
-          // 1. Left-side mountain ridge (u in [0.04, 0.36])
-          let leftMountain = 0;
-          if (u < 0.38) {
-            const bell = Math.exp(-Math.pow((u - 0.18) / 0.13, 2));
-            const h1 = Math.pow(Math.max(0, Math.sin(u * 20 + phase * 0.7)), 3.5);
-            const h2 = Math.pow(Math.max(0, Math.sin(u * 38 - phase * 1.0)), 4.0);
-            const h3 = Math.pow(Math.max(0, Math.cos(u * 54 + phase * 0.5)), 3.0);
-            leftMountain = (0.28 * h1 + 0.22 * h2 + 0.14 * h3) * bell;
-          }
-
-          // 2. Center sharp pyramid peaks (u in [0.32, 0.62])
-          let centerSpikes = 0;
-          if (u > 0.30 && u < 0.64) {
-            const bell = Math.exp(-Math.pow((u - 0.46) / 0.12, 2));
-            const c1 = Math.pow(Math.max(0, Math.sin(u * 38 + phase * 1.1)), 5.0);
-            const c2 = Math.pow(Math.max(0, Math.sin(u * 58 - phase * 0.9)), 5.5);
-            const c3 = Math.pow(Math.max(0, Math.cos(u * 76 + phase * 0.6)), 4.0);
-            centerSpikes = (0.24 * c1 + 0.26 * c2 + 0.12 * c3) * bell;
-          }
-
-          // 3. Right-side signature tall needle & dense serrations (u in [0.58, 0.96])
-          let rightCluster = 0;
-          if (u > 0.56) {
-            // Signature tall needle spike at u = 0.86 matching the artwork
-            const tallNeedle = Math.exp(-Math.pow((u - 0.86) / 0.012, 2)) * 0.72 * (0.85 + 0.15 * Math.sin(phase * 1.3));
-            // Secondary needle at u = 0.73
-            const midNeedle = Math.exp(-Math.pow((u - 0.73) / 0.016, 2)) * 0.40 * (0.85 + 0.15 * Math.cos(phase * 1.1));
-            // Tertiary needle at u = 0.65
-            const smallNeedle = Math.exp(-Math.pow((u - 0.65) / 0.02, 2)) * 0.28 * (0.85 + 0.15 * Math.sin(phase * 0.9));
-            // High-frequency serrated micro-ripples
-            const serrations = (Math.pow(Math.max(0, Math.sin(u * 96 + phase * 1.5)), 2.6) * 0.12 +
-                                Math.pow(Math.max(0, Math.cos(u * 165 - phase * 0.8)), 3.0) * 0.06);
-            const fade = Math.min(1.0, (u - 0.56) / 0.08);
-            rightCluster = (tallNeedle + midNeedle + smallNeedle + serrations) * fade;
-          }
-
-          currentSlice[j] = Math.max(0, (leftMountain + centerSpikes + rightCluster) * envelope);
-        }
-      }
-
-      // -----------------------------------------------------------------------
-      // Top-Down FIFO Queue Shift:
-      // New slices enter at TOP (index 0, horizon) and cascade DOWNWARDS to bottom
-      // -----------------------------------------------------------------------
       const queue = lineQueueRef.current;
-      if (queue.length > 0) {
-        queue.pop();
-        queue.unshift(currentSlice);
+
+      const analyser = getActiveAnalyser();
+      const isAudioPlaying = appContext ? appContext.isPlaying : isPlaying;
+
+      // Extract real-time frequency bands if audio is actively playing
+      let audioBands: AudioBands | null = null;
+      if (analyser && isAudioPlaying) {
+        if (!rawFreqDataRef.current || rawFreqDataRef.current.length !== analyser.frequencyBinCount) {
+          rawFreqDataRef.current = new Uint8Array(analyser.frequencyBinCount);
+        }
+        analyser.getByteFrequencyData(rawFreqDataRef.current);
+        const sampleRate = analyser.context?.sampleRate || 44100;
+        audioBands = extractAudioBands(rawFreqDataRef.current, analyser.frequencyBinCount, sampleRate);
       }
 
-      // -----------------------------------------------------------------------
-      // Perspective & Occlusion Rendering: Painter's Algorithm (Top to Bottom)
-      // -----------------------------------------------------------------------
-      const yHorizon = height * 0.42;     // Horizon starts at 42% height
-      const yForeground = height * 0.88;  // Foreground terminates cleanly above player bar at 88% height
-      const maxPeakHeight = height * 0.35;// Base peak amplitude ceiling for dramatic needle peaks
+      // Decoupled FIFO Queue Cadence: push slices at fixed 26 Hz
+      if (lastPushTimeRef.current === 0) {
+        lastPushTimeRef.current = timestamp;
+      }
+      const elapsed = timestamp - lastPushTimeRef.current;
 
-      for (let i = 0; i < queue.length; i++) {
-        const t = i / (queue.length - 1); // Depth: 0 (horizon) -> 1 (foreground baseline)
-        const slice = queue[i];
-
-        // 1. Perspective Spacing Math: tight uniform spacing in foreground (y ∝ t^1.22)
-        const yBase = yHorizon + (yForeground - yHorizon) * Math.pow(t, 1.22);
-
-        // 2. Depth Peak Envelope matching Joy Division artwork:
-        //    Horizon (t=0) has modest background ridges (~0.45)
-        //    Peaks tower to MAXIMUM height in mid-ground (t ≈ 0.22 to 0.40)
-        //    Foreground (t > 0.68) settles into flat, dense parallel baseline lines
-        let depthEnvelope: number;
-        if (t < 0.28) {
-          depthEnvelope = 0.45 + 0.55 * Math.sin((t / 0.28) * (Math.PI * 0.5));
-        } else {
-          const decay = Math.min(1.0, (t - 0.28) / 0.42);
-          depthEnvelope = Math.pow(Math.cos(decay * (Math.PI * 0.5)), 2.2);
+      if (elapsed >= PUSH_INTERVAL_MS) {
+        const pushes = Math.min(3, Math.floor(elapsed / PUSH_INTERVAL_MS));
+        for (let p = 0; p < pushes; p++) {
+          phaseRef.current += 0.085;
+          const newSlice = synthesizeSlice(numPoints, phaseRef.current, audioBands, isAudioPlaying);
+          if (queue.length > 0) {
+            queue.pop();
+            queue.unshift(newSlice);
+          }
         }
-        const peakScale = maxPeakHeight * depthEnvelope;
+        lastPushTimeRef.current = timestamp - (elapsed % PUSH_INTERVAL_MS);
+      }
 
-        // 3. Margin with subtle perspective flare
-        const xMargin = width * (0.04 - 0.01 * t);
-        const xSpan = width - 2 * xMargin;
+      // Continuous sub-pixel vertical scroll offset [0, 1] for 60/120 FPS fluid motion
+      const scrollOffset = Math.max(0, Math.min(1.0, (timestamp - lastPushTimeRef.current) / PUSH_INTERVAL_MS));
 
-        // 4. Subtle rolling undulation in foreground lines
-        const foregroundWaviness = Math.sin(t * Math.PI * 6 + idlePhaseRef.current * 0.4) * (0.6 * dpr) * Math.sin(t * Math.PI);
+      // Isometric Vertical Baseline Pitch: uniform spacing from horizon (top) to foreground (bottom)
+      const yTop = height * 0.235;
+      const yBottom = height * 0.775;
+      const deltaY = (yBottom - yTop) / numLines;
+      const maxPeakHeight = height * 0.092; // Maximum peak height towering over adjacent ridges
+
+      // Centered horizontal composition with symmetric 14% margins (uMin=0.20, uMax=0.80)
+      const xMargin = width * 0.14;
+      const xSpan = width - 2 * xMargin;
+
+      // Sub-pixel snapping offset for razor-sharp 1px hairline rendering
+      const lineWidthPx = Math.max(1, Math.round(1.0 * dpr));
+      const pixelOffset = lineWidthPx % 2 === 1 ? 0.5 : 0.0;
+
+      // Render lines from back to front (i = 0 is horizon, i = numLines - 1 is foreground)
+      for (let i = 0; i < queue.length; i++) {
+        const slice = queue[i];
+        if (!slice) continue;
+
+        // Sub-pixel continuous vertical translation: yBase(i) = yTop + (i + scrollOffset) * deltaY
+        const yBase = yTop + (i + scrollOffset) * deltaY;
+
+        // Foreground baseline settling taper: settle lines into calm baselines near bottom player bar
+        const t = i / (numLines - 1);
+        const depthFactor = t > 0.86 ? Math.cos(((t - 0.86) / 0.14) * (Math.PI * 0.5)) : 1.0;
+        const peakScale = maxPeakHeight * depthFactor;
 
         const points: { x: number; y: number }[] = [];
         for (let j = 0; j < numPoints; j++) {
           const u = j / (numPoints - 1);
-          const px = xMargin + u * xSpan;
-          const py = yBase - slice[j] * peakScale + foregroundWaviness;
+          const px = Math.round(xMargin + u * xSpan) + pixelOffset;
+          const py = Math.round(yBase - slice[j] * peakScale) + pixelOffset;
           points.push({ x: px, y: py });
         }
 
         if (points.length < 2) continue;
 
         // ---------------------------------------------------------------------
-        // Painter's Occlusion: Solid Black Skirt Fill (#000000)
+        // Painter's Occlusion Skirt: Solid Black Fill (#000000)
+        // Drops deltaY * 1.6 below baseline to occlude all lines behind it
         // ---------------------------------------------------------------------
+        const skirtDropY = Math.round(yBase + deltaY * 1.6) + pixelOffset;
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
-        for (let j = 1; j < points.length; j++) {
+        for (let j = 1; j < numPoints; j++) {
           ctx.lineTo(points[j].x, points[j].y);
         }
-        const lastPoint = points[points.length - 1];
-
-        // Extend path down past bottom of canvas to occlude lines beneath/behind
-        ctx.lineTo(lastPoint.x, height + 25 * dpr);
-        ctx.lineTo(points[0].x, height + 25 * dpr);
+        ctx.lineTo(points[numPoints - 1].x, skirtDropY);
+        ctx.lineTo(points[0].x, skirtDropY);
         ctx.closePath();
 
         ctx.fillStyle = '#000000';
         ctx.fill();
 
         // ---------------------------------------------------------------------
-        // High-Contrast Crisp Hairline White Contour Stroke
+        // Crisp Hairline White Contour Stroke (#ffffff)
         // ---------------------------------------------------------------------
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
-        for (let j = 1; j < points.length; j++) {
+        for (let j = 1; j < numPoints; j++) {
           ctx.lineTo(points[j].x, points[j].y);
         }
 
-        const strokeAlpha = 0.45 + 0.55 * (1 - t * 0.30);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${strokeAlpha.toFixed(3)})`;
-        ctx.lineWidth = Math.max(0.60, (0.75 - 0.15 * t) * dpr);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = lineWidthPx;
         ctx.lineJoin = 'miter';
-        ctx.miterLimit = 4;
+        ctx.miterLimit = 2;
         ctx.lineCap = 'butt';
         ctx.stroke();
       }
@@ -477,15 +584,15 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
       }
       resizeObserver.disconnect();
     };
-  }, [isPlaying, linesCount, pointsPerLine]);
+  }, [activeIsPlaying, linesCount, pointsPerLine, getActiveAnalyser]);
 
   useEffect(() => {
     return () => {
       if (animationFrameIdRef.current) {
         cancelAnimationFrame(animationFrameIdRef.current);
       }
-      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
-        audioCtxRef.current.close().catch(() => {});
+      if (localAudioCtxRef.current && localAudioCtxRef.current.state !== 'closed') {
+        localAudioCtxRef.current.close().catch(() => {});
       }
     };
   }, []);
@@ -498,25 +605,27 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
       className={`relative w-full max-w-xl mx-auto h-[740px] bg-black text-white flex flex-col justify-between select-none overflow-hidden font-sans border border-neutral-900 rounded-2xl shadow-2xl ${className}`}
       style={{ backgroundColor: '#000000' }}
     >
-      {/* Hidden Native Audio Element */}
-      <audio
-        ref={audioRef}
-        src={audioSrc}
-        crossOrigin="anonymous"
-        preload="metadata"
-        autoPlay={autoPlay}
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-        onEnded={handleAudioEnded}
-      />
+      {/* Hidden Native Audio Element (used only if standalone outside AppContext) */}
+      {!appContext && (
+        <audio
+          ref={localAudioRef}
+          src={audioSrc}
+          crossOrigin="anonymous"
+          preload="metadata"
+          autoPlay={autoPlay}
+          onTimeUpdate={() => localAudioRef.current && setCurrentTime(localAudioRef.current.currentTime)}
+          onLoadedMetadata={() => localAudioRef.current && setDuration(localAudioRef.current.duration)}
+          onEnded={onTrackEnd}
+        />
+      )}
 
       {/* --- Top Overlay Header: Authentic Joy Division Minimalist Poster Typography --- */}
       <div className="z-10 pt-12 px-8 flex flex-col items-center text-center pointer-events-none select-none">
         <h2 className="text-xl md:text-2xl font-normal text-white tracking-[0.16em] drop-shadow-sm max-w-md truncate">
-          {trackTitle || 'Disorder'}
+          {activeTitle}
         </h2>
         <span className="text-sm md:text-base text-neutral-300 font-light tracking-[0.14em] mt-1.5 max-w-md truncate">
-          {artistName || 'Joy Division'}
+          {activeArtist}
         </span>
       </div>
 
@@ -570,12 +679,12 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
 
         {/* Player Action Toolbar */}
         <div className="flex items-center justify-between gap-4">
-          {/* Left: Optional Album Art Thumbnail + Metadata */}
+          {/* Left: Album Art Thumbnail + Metadata */}
           <div className="flex items-center gap-3 min-w-0 w-1/3">
-            {albumArtUrl ? (
+            {activeAlbumArt ? (
               <img
-                src={albumArtUrl}
-                alt={trackTitle}
+                src={activeAlbumArt}
+                alt={activeTitle}
                 className="w-10 h-10 rounded bg-neutral-900 border border-neutral-800 object-cover shrink-0"
               />
             ) : (
@@ -584,11 +693,11 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
               </div>
             )}
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-medium text-neutral-200 truncate" title={trackTitle}>
-                {trackTitle || 'No Track Selected'}
+              <span className="text-xs font-medium text-neutral-200 truncate" title={activeTitle}>
+                {activeTitle}
               </span>
-              <span className="text-[11px] text-neutral-500 truncate font-mono" title={artistName}>
-                {artistName || 'SpotScraper Player'}
+              <span className="text-[11px] text-neutral-500 truncate font-mono" title={activeArtist}>
+                {activeArtist}
               </span>
             </div>
           </div>
@@ -597,14 +706,18 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
           <div className="flex items-center justify-center gap-4">
             <button
               onClick={togglePlayPause}
-              disabled={!audioSrc}
-              aria-label={isPlaying ? 'Pause' : 'Play'}
+              disabled={
+                appContext
+                  ? !appContext.currentTrack && (!appContext.downloads || appContext.downloads.length === 0)
+                  : !audioSrc
+              }
+              aria-label={activeIsPlaying ? 'Pause' : 'Play'}
               className="w-12 h-12 rounded-full bg-white text-black hover:bg-neutral-200 active:scale-95 transition-all duration-150 flex items-center justify-center shadow-lg disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
               style={{
                 transition: 'transform 160ms cubic-bezier(0.23, 1, 0.32, 1), background-color 160ms ease',
               }}
             >
-              {isPlaying ? (
+              {activeIsPlaying ? (
                 /* Pause Icon (Double vertical bars) */
                 <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                   <rect x="6" y="4" width="4" height="16" rx="1.5" />
@@ -629,13 +742,28 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
               {isMuted || volume === 0 ? (
                 /* Volume Mute Icon */
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
+                  />
                 </svg>
               ) : (
                 /* Volume High Icon */
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                  />
                 </svg>
               )}
             </button>
@@ -648,6 +776,8 @@ export const JoyDivisionVisualizer: React.FC<JoyDivisionVisualizerProps> = ({
               onChange={(e) => {
                 const newVol = parseFloat(e.target.value);
                 setVolume(newVol);
+                if (activeAudioRef?.current) activeAudioRef.current.volume = isMuted ? 0 : newVol;
+                if (appContext?.setVolume) appContext.setVolume(newVol);
                 if (isMuted && newVol > 0) setIsMuted(false);
               }}
               className="w-20 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-white hover:accent-neutral-200"
