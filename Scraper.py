@@ -1,4 +1,5 @@
 import json
+import tempfile
 import os
 import re
 import time
@@ -26,14 +27,16 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-log_handler = logging.FileHandler('scrape_audit.log')
+DATA_DIR = os.path.abspath(os.environ.get('DATA_DIR', os.path.dirname(__file__)))
+os.makedirs(DATA_DIR, exist_ok=True)
+log_handler = logging.FileHandler(os.path.join(DATA_DIR, 'scrape_audit.log'))
 formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s')
 log_handler.setFormatter(formatter)
 logger = logging.getLogger('scraper')
 logger.setLevel(logging.INFO)
 logger.addHandler(log_handler)
 
-CACHE_FILE = 'download_cache.json'
+CACHE_FILE = os.path.join(DATA_DIR, 'download_cache.json')
 
 def load_cache():
     if os.path.exists(CACHE_FILE):
@@ -46,15 +49,28 @@ def load_cache():
 
 def save_cache(cache_dict):
     try:
-        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(cache_dict, f, indent=4, ensure_ascii=False)
+        os.makedirs(DATA_DIR, exist_ok=True)
+        name = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=DATA_DIR, delete=False) as f:
+                name = f.name
+                json.dump(cache_dict, f, indent=4, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(name, CACHE_FILE)
+        finally:
+            if name and os.path.exists(name):
+                os.unlink(name)
     except Exception as e:
         print(f"Error saving cache: {e}")
 
 def _post_log(url, payload):
-    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+    token = os.environ.get('SCRAPER_INTERNAL_TOKEN', '')
+    headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {token}'}
+    req = urllib.request.Request(url, data=payload, headers=headers)
     try:
-        urllib.request.urlopen(req, timeout=2)
+        with urllib.request.urlopen(req, timeout=2) as response:
+            response.read()
     except Exception as e:
         print(f"Error emitting log: {e}")
 
@@ -64,7 +80,7 @@ def emit_log(log_type, key, data):
     if isinstance(data, dict):
         data['source'] = 'api'
     
-    url = "http://localhost:3001/api/internal/log"
+    url = os.environ.get('SCRAPER_LOG_URL', 'http://localhost:3001/api/internal/log')
     payload = json.dumps({
         "type": log_type,
         "key": key,

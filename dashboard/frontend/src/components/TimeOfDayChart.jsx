@@ -34,7 +34,7 @@ export default function TimeOfDayChart({ data = [] }) {
                 strokeWidth={2}
                 cornerRadius={6}
                 paddingAngle={2}
-                label={({ period, hours }) => `${Math.round((hours / total) * 100)}%`}
+                label={({ hours }) => `${Math.round((hours / total) * 100)}%`}
                 labelLine={false}
               >
                 {data.map((entry, i) => (

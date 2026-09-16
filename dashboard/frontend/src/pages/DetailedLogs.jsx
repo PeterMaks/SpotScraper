@@ -53,12 +53,7 @@ export default function DetailedLogs() {
     return () => window.removeEventListener('resize', handleResize);
   }, [logsFilter]);
 
-  // ponytail: fetch once on mount if empty; manual Refresh Logs button handles on-demand reload
-  useEffect(() => {
-    if (!logs?.downloadLinks || Object.keys(logs.downloadLinks).length === 0) {
-      fetchLogs();
-    }
-  }, []);
+  // AppProvider handles initial loading; the refresh button handles manual reloads.
 
   const getLogsList = () => {
     const list = [];

@@ -3,7 +3,7 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from "react";
 import { useAppContext } from "../AppContext";
-import { ThemeProvider, useTheme } from './ThemeProvider';
+import { useTheme } from './ThemeProvider';
 import Icons from './Icons';
 import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -244,6 +244,9 @@ export default function Layout() {
               if (sliderRef.current) sliderRef.current.value = e.target.currentTime;
               if (timeTextRef.current) timeTextRef.current.innerText = formatTime(e.target.currentTime);
             }}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onError={() => { pendingPlayRef.current = false; setIsPlaying(false); }}
             onLoadedMetadata={handleLoadedMetadata}
             onEnded={handlePlayNext}
           />

@@ -1,5 +1,5 @@
 
-import React, { useState, useDeferredValue, useTransition } from 'react';
+import { useState, useDeferredValue, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../AppContext';
@@ -30,7 +30,7 @@ export default function Downloads() {
   const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
 
   const deferredSearch = useDeferredValue(downloadsSearch);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const filteredDownloads = downloads.filter(file => file.name.toLowerCase().includes(deferredSearch.toLowerCase()));
 

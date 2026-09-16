@@ -1,8 +1,8 @@
 
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useAppContext } from '../AppContext';
 import Icons from '../components/Icons';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
@@ -97,7 +97,7 @@ export default function ScraperControl() {
     scraperType, setScraperType,
     scraperOutput, setScraperOutput,
     scraperLimit, setScraperLimit,
-    scraperMode, setScraperMode,
+    scraperMode,
     scraperUrl,
     selectedSource, setSelectedSource,
     sourceFiles,

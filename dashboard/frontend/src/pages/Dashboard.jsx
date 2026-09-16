@@ -213,18 +213,22 @@ export default function Dashboard() {
     let ok = 0;
     try {
       for (const file of files) {
-        const base64 = await new Promise((res, rej) => {
-          const r = new FileReader();
-          r.onload = () => res(r.result.split(',')[1]);
-          r.onerror = () => rej(r.error);
-          r.readAsDataURL(file);
-        });
+        if (!/\.(csv|json)$/i.test(file.name)) {
+          throw new Error('Upload CSV or JSON files only.');
+        }
+        const formData = new FormData();
+        formData.append('file', file);
         const resp = await fetch(`${backendUrl}/api/apple/upload`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: file.name, content: base64 }),
+          body: formData,
         });
-        if (resp.ok) ok++;
+        if (!resp.ok) {
+          const message = await resp.text();
+          throw new Error(`Server returned ${resp.status}: ${message.slice(0, 100) || resp.statusText}`);
+        }
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Server did not accept the file.');
+        ok++;
       }
       setAppleUploadStatus(`Uploaded ${ok} file(s). Refreshing...`);
       fetchAppleStats();
@@ -272,7 +276,7 @@ export default function Dashboard() {
         <Card className="bg-card border border-dashed border-border shadow-sm transition-colors hover:border-primary/50 p-6">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl">Spotify Data</CardTitle>
-            <CardDescription>StreamingHistory*.json, Playlist*.json, .csv / .xlsx</CardDescription>
+            <CardDescription>StreamingHistory*.json, Playlist*.json, or .csv (CSV and JSON only)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4">
@@ -293,7 +297,7 @@ export default function Dashboard() {
         <Card className="bg-card border border-dashed border-border shadow-sm transition-colors hover:border-primary/50 p-6">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl">Apple Music Data</CardTitle>
-            <CardDescription>Apple Music - Play History Daily Tracks .csv</CardDescription>
+            <CardDescription>Apple Music play history .csv or .json (CSV and JSON only)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4">

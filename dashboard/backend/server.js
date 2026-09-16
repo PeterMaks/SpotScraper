@@ -1,30 +1,36 @@
 const express = require('express');
 const cors = require('cors');
+const { resolveDownloadFile } = require('./download-path');
 
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 fs.pathExists = async (p) => { try { await fs.access(p); return true; } catch { return false; } };
 fs.readJson = async (p) => JSON.parse(await fs.readFile(p, 'utf8'));
-fs.writeJson = async (p, d, o) => fs.writeFile(p, JSON.stringify(d, null, o?.spaces || 0), 'utf8');
+fs.writeJson = require('./state-store').writeJson;
 fs.ensureDir = async (p) => fs.mkdir(p, { recursive: true });
 fs.remove = async (p) => fs.rm(p, { recursive: true, force: true });
 const { spawn } = require('child_process');
 const { aggregateStats } = require('./parser');
 const { aggregateAppleStats } = require('./apple_parser');
+const { createAsyncCache } = require('./stats-cache');
+const spotifyStatsCache = createAsyncCache(aggregateStats, { ttlMs: 60_000 });
+const appleStatsCache = createAsyncCache(aggregateAppleStats, { ttlMs: 60_000 });
 
-const archiver = require('archiver');
-const mm = require('music-metadata');
+const { ZipArchive } = require('archiver');
+const metadataModule = import('music-metadata');
 // --- Global Log State ---
 const rootDir = path.join(__dirname, '../..');
-const downloadLinksPath = path.join(rootDir, 'download_links.json');
-const scrapeLogPath = path.join(rootDir, 'scrape_log.json');
+const stateDir = path.resolve(process.env.DATA_DIR || rootDir);
+const downloadLinksPath = path.join(stateDir, 'download_links.json');
+const scrapeLogPath = path.join(stateDir, 'scrape_log.json');
 
 let inMemoryDownloadLinks = {};
 let inMemoryScrapeLog = {};
 
-(async () => {
+const ready = (async () => {
   try {
+    await fs.ensureDir(stateDir);
     if (await fs.pathExists(downloadLinksPath)) {
       inMemoryDownloadLinks = await fs.readJson(downloadLinksPath);
     }
@@ -65,7 +71,7 @@ function parseCSV(content) {
 let cachedUserMetadata = null;
 
 async function loadUserMetadataMap() {
-  const dataDir = path.join(__dirname, '../../spotify_data');
+  const dataDir = (process.env.SPOTIFY_DATA_DIR || path.join(rootDir, 'spotify_data'));
   const queryToMeta = {};
   const titleToMeta = {};
 
@@ -186,17 +192,30 @@ function isPlaceholder(val) {
   return lower === '' || lower === '-' || lower === 'local cache' || lower === 'already downloaded' || lower === 'unknown (local cache)' || lower === 'unknown artist' || lower === 'youtube video';
 }
 
+const { randomBytes } = require('node:crypto');
+const internalToken = process.env.SCRAPER_INTERNAL_TOKEN || randomBytes(32).toString('hex');
+const { createApiGuard } = require('./security');
+const { rateLimit } = require('express-rate-limit');
+
 const app = express();
 const port = 3001;
 
 // Disable Express fingerprinting banner
 app.disable('x-powered-by');
+app.set('trust proxy', false);
+const apiLimiter = rateLimit({ windowMs: 60_000, limit: 600, standardHeaders: 'draft-8', legacyHeaders: false });
+app.use(apiLimiter);
+app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
 // Restrict CORS to localhost/127.0.0.1 dynamically to support varying local ports
 const allowedOrigins = [
   /^http:\/\/localhost(:\d+)?$/,
   /^http:\/\/127\.0\.0\.1(:\d+)?$/
 ];
+
+// Local-only guard: cross-site/non-local origins and rebound hosts are rejected;
+// /api/internal/* additionally requires the scraper's bearer token.
+app.use(createApiGuard({ internalToken }));
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -209,7 +228,7 @@ app.use(cors({
     }
   },
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Sec-Fetch-Site'],
 }));
 
 // Set HTTP Security Headers manual middleware
@@ -221,42 +240,37 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.get('/healthz', (req, res) => res.json({ status: 'ok' }));
+app.use(express.json({ limit: '1mb' }));
 
 // Serving the downloads directory statically for direct access
-const downloadsDir = path.join(__dirname, '../../downloads');
+const downloadsDir = path.resolve(process.env.DOWNLOADS_DIR || path.join(rootDir, 'downloads'));
 const appleMusicDataDir = path.join(__dirname, '../../apple_music_data/csvs');
-app.use('/api/downloads/file', express.static(downloadsDir));
+app.get('/api/downloads/file/*', async (req, res, next) => {
+  try {
+    const file = await resolveDownloadFile(downloadsDir, req.params[0]);
+    res.sendFile(file, err => { if (err) next(err); });
+  } catch (err) { next(err); }
+});
 
 // Serve extracted album art directly from ID3 tags
 app.get('/api/downloads/art/*', async (req, res) => {
   try {
-    const filename = decodeURIComponent(req.params[0]);
-    const filePath = path.join(downloadsDir, filename);
+    const filePath = await resolveDownloadFile(downloadsDir, req.params[0]);
 
-    // Security check to prevent directory traversal
-    if (!path.resolve(filePath).startsWith(path.resolve(downloadsDir))) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
-    if (!await fs.pathExists(filePath)) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-
-    const metadata = await mm.parseFile(filePath, { duration: false });
+    const metadata = await (await metadataModule).parseFile(filePath, { duration: false });
     const picture = metadata.common.picture && metadata.common.picture[0];
 
     if (picture) {
       res.setHeader('Content-Type', picture.format);
-      res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+      res.setHeader('Cache-Control', 'private, max-age=3600');
       res.send(picture.data);
     } else {
       res.status(404).json({ error: 'No album art found' });
     }
   } catch (err) {
     // ponytail: quietly return 404 on corrupted ID3 tags so the frontend image falls back gracefully without spamming the backend logs
-    res.status(404).json({ error: 'Album art missing or tag corrupted' });
+    res.status(err.status || 404).json({ error: 'Album art missing or unavailable' });
   }
 });
 // Background process state
@@ -268,7 +282,7 @@ let processType = ''; // 'api' or 'selenium'
 // Get Apple Music stats
 app.get('/api/apple/stats', async (req, res) => {
   try {
-    const stats = await aggregateAppleStats();
+    const stats = await appleStatsCache.get();
     res.json(stats);
   } catch (err) {
     console.error('Failed to aggregate Apple stats', { error: err.message, ip: req.ip });
@@ -279,7 +293,7 @@ app.get('/api/apple/stats', async (req, res) => {
 // List Apple Music source files
 app.get('/api/apple/sources', async (req, res) => {
   try {
-    const baseDir = path.join(__dirname, '../../apple_music_data');
+    const baseDir = (process.env.APPLE_DATA_DIR || path.join(rootDir, 'apple_music_data'));
     const sources = [];
     for (const sub of ['csvs', 'jsons']) {
       const dir = path.join(baseDir, sub);
@@ -296,37 +310,10 @@ app.get('/api/apple/sources', async (req, res) => {
   }
 });
 
-// Upload Apple Music data file
-app.post('/api/apple/upload', async (req, res) => {
-  try {
-    const { fileName, content } = req.body;
-    if (!fileName || !content) return res.status(400).json({ error: 'Missing fileName or content.' });
-    const safeName = path.basename(fileName);
-    const ext = path.extname(safeName).toLowerCase();
-    // ponytail: route by extension — csvs/ for play history, jsons/ for library metadata (genres)
-    const subDir = ext === '.json' ? 'jsons' : ext === '.csv' ? 'csvs' : null;
-    if (!subDir) {
-      return res.status(400).json({ error: 'Unsupported file type. Only .csv and .json files are accepted.' });
-    }
-    const targetDir = path.join(__dirname, '../../apple_music_data', subDir);
-    await fs.ensureDir(targetDir);
-    const fileBuffer = Buffer.from(content, 'base64');
-    if (fileBuffer.length > 50 * 1024 * 1024) {
-      return res.status(400).json({ error: 'File size exceeds the 50MB limit.' });
-    }
-    await fs.writeFile(path.join(targetDir, safeName), fileBuffer);
-    console.log('Apple Music file uploaded', { ip: req.ip, file: safeName, subDir });
-    res.json({ success: true, message: `Successfully uploaded ${safeName} to ${subDir}/` });
-  } catch (err) {
-    console.error('Failed to upload Apple Music file', { error: err.message, ip: req.ip });
-    res.status(500).json({ error: 'Failed to upload Apple Music file.' });
-  }
-});
-
 // Get Spotify recap stats
 app.get('/api/stats', async (req, res) => {
   try {
-    const stats = await aggregateStats();
+    const stats = await spotifyStatsCache.get();
     res.json(stats);
   } catch (err) {
     console.error('Failed to aggregate stats', { error: err.message, ip: req.ip });
@@ -348,8 +335,8 @@ app.get('/api/downloads', async (req, res) => {
     let cacheMap = {};
     let metaMap = {};
     try {
-      const cacheData = await fs.readJson(path.join(rootDir, 'download_cache.json')).catch(() => ({}));
-      const metaData = await fs.readJson(path.join(rootDir, 'download_links.json')).catch(() => ({}));
+      const cacheData = await fs.readJson(path.join(stateDir, 'download_cache.json')).catch(() => ({}));
+      const metaData = await fs.readJson(path.join(stateDir, 'download_links.json')).catch(() => ({}));
 
       // cacheData maps query string to { file_path: "C:\\...\\downloads\\Song.mp3" }
       for (const [query, val] of Object.entries(cacheData)) {
@@ -444,110 +431,52 @@ app.get('/api/downloads', async (req, res) => {
   }
 });
 
-// Delete a download file (handles subfolders via wildcard match)
-app.delete('/api/downloads/file/*', async (req, res) => {
+// Downloads are application-owned. Only selected regular files may be removed.
+app.delete('/api/downloads/file/*', async (req, res, next) => {
   try {
-    const relativePath = req.params[0];
-    const filePath = path.join(downloadsDir, relativePath);
-
-    // Resolve paths to absolute paths to prevent directory traversal
-    const resolvedPath = path.resolve(filePath);
-    const resolvedDownloadsDir = path.resolve(downloadsDir);
-
-    if (!resolvedPath.startsWith(resolvedDownloadsDir)) {
-      console.warn('Directory traversal attempt detected', { ip: req.ip, path: relativePath });
-      return res.status(403).json({ error: 'Access denied: Directory traversal detected.' });
-    }
-
-    if (await fs.pathExists(resolvedPath)) {
-      await fs.remove(resolvedPath);
-      console.log('File deleted', { ip: req.ip, file: relativePath });
-      res.json({ success: true, message: `Deleted ${relativePath}` });
-    } else {
-      res.status(404).json({ error: 'File not found' });
-    }
-  } catch (err) {
-    console.error('Failed to delete file', { error: err.message, ip: req.ip, file: req.params[0] });
-    res.status(500).json({ error: 'Failed to delete file' });
-  }
+    const file = await resolveDownloadFile(downloadsDir, req.params[0]);
+    await fs.unlink(file);
+    res.json({ success: true, message: `Deleted ${req.params[0]}` });
+  } catch (err) { next(err); }
 });
 
-// Batch delete
+function validFiles(files) {
+  return Array.isArray(files) && files.length > 0 && files.length <= 500 &&
+    files.every(f => typeof f === 'string' && f.length > 0 && f.length <= 1024);
+}
 app.post('/api/downloads/delete-batch', async (req, res) => {
-  try {
-    const { files } = req.body;
-    if (!Array.isArray(files)) {
-      return res.status(400).json({ error: 'files must be an array' });
-    }
-
-    const deleted = [];
-    const errors = [];
-
-    const resolvedDownloadsDir = path.resolve(downloadsDir);
-
-    for (const relativePath of files) {
-      const filePath = path.join(downloadsDir, relativePath);
-      const resolvedPath = path.resolve(filePath);
-
-      if (!resolvedPath.startsWith(resolvedDownloadsDir)) {
-        errors.push({ file: relativePath, error: 'Directory traversal detected' });
-        continue;
-      }
-
-      if (await fs.pathExists(resolvedPath)) {
-        await fs.remove(resolvedPath);
-        deleted.push(relativePath);
-      } else {
-        errors.push({ file: relativePath, error: 'File not found' });
-      }
-    }
-
-    console.log('Batch delete completed', { ip: req.ip, deletedCount: deleted.length, errorCount: errors.length });
-    res.json({ success: true, deleted, errors });
-  } catch (err) {
-    console.error('Failed batch delete', { error: err.message, ip: req.ip });
-    res.status(500).json({ error: 'Failed batch delete' });
+  const { files } = req.body;
+  if (!validFiles(files)) return res.status(400).json({ error: 'Provide 1–500 filenames' });
+  const deleted = [], errors = [];
+  for (const name of new Set(files)) {
+    try {
+      await fs.unlink(await resolveDownloadFile(downloadsDir, name));
+      deleted.push(name);
+    } catch (err) { errors.push({ file: name, error: err.status ? err.message : 'Deletion failed' }); }
   }
+  res.json({ success: errors.length === 0, deleted, errors });
 });
 
-// Batch download ZIP
-app.post('/api/downloads/zip', async (req, res) => {
+app.post('/api/downloads/zip', async (req, res, next) => {
   try {
     const { files } = req.body;
-    if (!Array.isArray(files) || files.length === 0) {
-      return res.status(400).json({ error: 'files must be a non-empty array' });
+    if (!validFiles(files)) return res.status(400).json({ error: 'Provide 1–500 filenames' });
+    const entries = [];
+    let bytes = 0;
+    for (const name of new Set(files)) {
+      const file = await resolveDownloadFile(downloadsDir, name);
+      bytes += (await fs.stat(file)).size;
+      if (bytes > 2 * 1024 ** 3) return res.status(413).json({ error: 'ZIP selection exceeds 2 GiB' });
+      entries.push({ file, name: path.relative(downloadsDir, file).replace(/\\/g, '/') });
     }
-
-    const resolvedDownloadsDir = path.resolve(downloadsDir);
-
+    const archive = new ZipArchive({ zlib: { level: 0 } });
+    archive.on('error', next);
+    res.on('close', () => archive.abort());
     res.attachment('spotscraper_batch.zip');
-    const archive = archiver('zip', {
-      zlib: { level: 0 } // Fast compression since MP3s are already compressed
-    });
-
-    archive.on('error', function (err) {
-      console.error('Archive error', { error: err.message });
-      if (!res.headersSent) res.status(500).send({ error: err.message });
-    });
-
     archive.pipe(res);
-
-    for (const relativePath of files) {
-      const filePath = path.join(downloadsDir, relativePath);
-      const resolvedPath = path.resolve(filePath);
-
-      if (resolvedPath.startsWith(resolvedDownloadsDir) && await fs.pathExists(resolvedPath)) {
-        archive.file(resolvedPath, { name: path.basename(relativePath) });
-      }
-    }
-
-    archive.finalize();
-  } catch (err) {
-    console.error('Failed batch zip', { error: err.message, ip: req.ip });
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed batch zip' });
-    }
-  }
+    for (const entry of entries) archive.file(entry.file, { name: entry.name });
+    await archive.finalize();
+  } catch (err) { next(err); }
 });
 
 // Read previous scrape logs
@@ -567,14 +496,15 @@ app.get('/api/logs', async (req, res) => {
 app.post('/api/internal/log', async (req, res) => {
   try {
     const { type, key, data } = req.body;
+    if (!['downloadLinks', 'scrapeLog'].includes(type) || typeof key !== 'string' || key.length > 1024 || ['__proto__', 'constructor', 'prototype'].includes(key)) return res.status(400).json({ error: 'Invalid log entry' });
     if (type === 'downloadLinks') {
       inMemoryDownloadLinks[key] = data;
-      fs.writeJson(downloadLinksPath, inMemoryDownloadLinks, { spaces: 4 }).catch(err => {
+      await fs.writeJson(downloadLinksPath, inMemoryDownloadLinks, { spaces: 4 }).catch(err => {
         console.error('Failed to flush downloadLinks to disk', { error: err.message });
       });
     } else if (type === 'scrapeLog') {
       inMemoryScrapeLog[key] = data;
-      fs.writeJson(scrapeLogPath, inMemoryScrapeLog, { spaces: 4 }).catch(err => {
+      await fs.writeJson(scrapeLogPath, inMemoryScrapeLog, { spaces: 4 }).catch(err => {
         console.error('Failed to flush scrapeLog to disk', { error: err.message });
       });
     }
@@ -588,8 +518,8 @@ app.post('/api/internal/log', async (req, res) => {
 // Helper to archive log entries
 async function archiveLogs(downloadLinksKeys, scrapeLogKeys, allDownloadLinks, allScrapeLog) {
   const rootDir = path.join(__dirname, '../..');
-  const archiveLinksPath = path.join(rootDir, 'archive_download_links.json');
-  const archiveScrapePath = path.join(rootDir, 'archive_scrape_log.json');
+  const archiveLinksPath = path.join(stateDir, 'archive_download_links.json');
+  const archiveScrapePath = path.join(stateDir, 'archive_scrape_log.json');
 
   if (downloadLinksKeys.length > 0) {
     let archiveLinks = {};
@@ -676,53 +606,18 @@ app.post('/api/logs/clear', async (req, res) => {
   }
 });
 
-// Upload Spotify history JSON, CSV or Excel file (Base64 decoder)
-app.post('/api/upload', async (req, res) => {
-  try {
-    const { fileName, content } = req.body;
-    if (!fileName || !content) {
-      return res.status(400).json({ error: 'Missing fileName or content.' });
-    }
-
-    const spotifyDataDir = path.join(__dirname, '../../spotify_data');
-    await fs.ensureDir(spotifyDataDir);
-
-    // Clean up filename to prevent directory traversal
-    const safeName = path.basename(fileName);
-
-    // Whitelist file extensions
-    const ext = path.extname(safeName).toLowerCase();
-    if (!['.json', '.csv', '.xlsx', '.xls'].includes(ext)) {
-      return res.status(400).json({ error: 'Unsupported file type. Only .json, .csv, .xlsx, and .xls files are allowed.' });
-    }
-
-    const targetPath = path.join(spotifyDataDir, safeName);
-
-    // Write file decoding from base64
-    const fileBuffer = Buffer.from(content, 'base64');
-
-    // Restrict size to 50MB
-    const MAX_UPLOAD_SIZE = 50 * 1024 * 1024;
-    if (fileBuffer.length > MAX_UPLOAD_SIZE) {
-      console.warn('File upload exceeded size limit', { ip: req.ip, file: safeName, size: fileBuffer.length });
-      return res.status(400).json({ error: 'File size exceeds the 50MB limit.' });
-    }
-
-    await fs.writeFile(targetPath, fileBuffer);
-    cachedUserMetadata = null; // Invalidate cache so it is rebuilt on the next query
-
-    console.log('File uploaded successfully', { ip: req.ip, file: safeName });
-    res.json({ success: true, message: `Successfully uploaded ${safeName}` });
-  } catch (err) {
-    console.error('Failed to upload file', { error: err.message, ip: req.ip });
-    res.status(500).json({ error: 'Failed to upload file.' });
-  }
-});
+// Stream imports through a single validated router.
+const { createUploadRouter } = require('./uploads');
+app.use('/api', createUploadRouter({
+  spotifyDir: process.env.SPOTIFY_DATA_DIR || path.join(rootDir, 'spotify_data'),
+  appleDir: process.env.APPLE_DATA_DIR || path.join(rootDir, 'apple_music_data'),
+  onUploaded: () => { cachedUserMetadata = null; spotifyStatsCache.invalidate(); appleStatsCache.invalidate(); }
+}));
 
 // List available data source files
 app.get('/api/sources', async (req, res) => {
   try {
-    const spotifyDataDir = path.join(__dirname, '../../spotify_data');
+    const spotifyDataDir = (process.env.SPOTIFY_DATA_DIR || path.join(rootDir, 'spotify_data'));
     if (!(await fs.pathExists(spotifyDataDir))) {
       return res.json({ sources: [] });
     }
@@ -742,7 +637,14 @@ app.post('/api/scrape/start', (req, res, next) => {
       return res.status(400).json({ error: 'A scrape process is already running.' });
     }
 
-    const { script, limit, website, mode, query, sourceFile } = req.body;
+    const { script, limit, website, query, sourceFile } = req.body;
+    if ((script !== undefined && !['api', 'selenium'].includes(script)) ||
+        (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 500)) ||
+        (query !== undefined && (typeof query !== 'string' || query.length > 500)) ||
+        (sourceFile !== undefined && (typeof sourceFile !== 'string' || sourceFile.length > 200 || /[\\/]/.test(sourceFile))) ||
+        (website !== undefined && !['https://qobuz.squid.wtf', 'https://qobuz.squid.wtf/'].includes(website))) {
+      return res.status(400).json({ error: 'Invalid scraper settings (limit 1–500, approved website only).' });
+    }
 
     processType = script || 'api';
     processLog = `Starting ${processType === 'selenium' ? 'High Quality - Albums (320kbps)' : 'Fast MP3 - Tracks (192kbps)'}...\n`;
@@ -791,6 +693,8 @@ app.post('/api/scrape/start', (req, res, next) => {
       cwd: rootDir,
       env: {
         ...process.env,
+        SCRAPER_INTERNAL_TOKEN: internalToken,
+        DATA_DIR: stateDir,
         PYTHONUNBUFFERED: '1',
         PYTHONIOENCODING: 'utf-8',
         PYTHONUTF8: '1'
@@ -859,12 +763,17 @@ app.post('/api/scrape/stop', (req, res) => {
 
 // Global Error Handler Middleware (CWE-756 / CWE-248)
 app.use((err, req, res, next) => {
-  console.error('Unhandled server error', { error: err.message, stack: err.stack, ip: req.ip, path: req.path });
-  res.status(500).json({ error: 'An unexpected server error occurred. Please try again later.' });
+  if (!err.status || err.status >= 500) console.error('Server error', { error: err.message, path: req.path });
+  if (res.headersSent) return next(err);
+  const status = err.status >= 400 && err.status < 500 ? err.status : 500;
+  res.status(status).json({ error: status < 500 ? err.message : 'An unexpected server error occurred.' });
 });
 
 // Start Express Server
 const host = process.env.HOST || '127.0.0.1';
-app.listen(port, host, () => {
-  console.log(`Backend listening at http://${host}:${port}`);
-});
+if (require.main === module) {
+  ready.then(() => app.listen(Number(process.env.PORT || port), host, () => {
+    console.log(`Backend listening on ${host}`);
+  })).catch(err => { console.error(err.message); process.exitCode = 1; });
+}
+module.exports = { app, ready };

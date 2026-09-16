@@ -17,7 +17,9 @@ COPY Scraper.py .
 COPY spotify_recap.py .
 
 # Create runtime directories
-RUN mkdir -p downloads spotify_data
+RUN addgroup -g 1000 app && adduser -D -u 1000 -G app app && mkdir -p downloads spotify_data data && chown -R app:app /app
+ENV DATA_DIR=/app/data
+USER app
 
 VOLUME ["/app/downloads", "/app/spotify_data"]
 

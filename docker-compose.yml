@@ -8,11 +8,8 @@
 #   docker compose logs -f backend    — Tail backend logs
 #   docker compose down               — Stop everything
 #
-# FIRST RUN: Ensure these JSON files exist at the project root
-# (they are auto-generated at runtime, but Docker needs them to exist):
-#   echo {} > download_cache.json
-#   echo {} > download_links.json
-#   echo {} > scrape_log.json
+# Runtime JSON state lives in backend_data at /app/data.
+# Back up existing state before migrating; files are not moved automatically.
 
 services:
   # ──────────────────────────────────────────
@@ -26,10 +23,9 @@ services:
     volumes:
       - downloads_data:/app/downloads
       - spotify_data:/app/spotify_data
-      - ./download_cache.json:/app/download_cache.json
-      - ./download_links.json:/app/download_links.json
-      - ./scrape_log.json:/app/scrape_log.json
+      - backend_data:/app/data
     environment:
+      - DATA_DIR=/app/data
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING=utf-8
     # Not started by default — use `docker compose run scraper` to launch
@@ -46,7 +42,7 @@ services:
       dockerfile: dashboard/backend/Dockerfile
     container_name: spotscraper-backend
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     volumes:
       - downloads_data:/app/downloads
       - spotify_data:/app/spotify_data
@@ -55,9 +51,10 @@ services:
     environment:
       - NODE_ENV=production
       - HOST=0.0.0.0
+      - DATA_DIR=/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3001/api/stats"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3001/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -72,7 +69,7 @@ services:
       dockerfile: Dockerfile
     container_name: spotscraper-frontend
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     depends_on:
       backend:
         condition: service_healthy

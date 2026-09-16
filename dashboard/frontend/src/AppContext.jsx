@@ -1,5 +1,5 @@
 // @refresh reset
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 
 const AppContext = createContext();
 
@@ -60,7 +60,7 @@ export const AppProvider = ({ children }) => {
       audioCtxRef.current = ctx;
 
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
+      analyser.fftSize = 2048;
       analyser.smoothingTimeConstant = 0.78;
       analyserRef.current = analyser;
 
@@ -91,7 +91,6 @@ export const AppProvider = ({ children }) => {
   const [loadingDownloads, setLoadingDownloads] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(true);
 
-  const pollIntervalRef = useRef(null);
   const pollCounterRef = useRef(0);
 
   const backendUrl = import.meta.env.DEV ? 'http://localhost:3001' : '';
@@ -100,6 +99,15 @@ export const AppProvider = ({ children }) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    for (const file of files) {
+      if (!/\.(csv|json)$/i.test(file.name)) {
+        setUploadStatus('Upload CSV or JSON files only.');
+        setTimeout(() => setUploadStatus(''), 5000);
+        return;
+      }
+    }
+
+
     setUploading(true);
     setUploadStatus('Uploading files...');
     
@@ -107,18 +115,13 @@ export const AppProvider = ({ children }) => {
     
     try {
       for (const file of files) {
-        const base64Data = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(file);
-        });
-        
+        const formData = new FormData();
+        formData.append('file', file);
         const res = await fetch(`${backendUrl}/api/upload`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: file.name, content: base64Data })
+          body: formData
         });
+        // Let the browser include the multipart boundary in Content-Type.
         
         if (!res.ok) {
           const errText = await res.text();
@@ -126,7 +129,8 @@ export const AppProvider = ({ children }) => {
         }
         
         const data = await res.json();
-        if (data.success) successCount++;
+        if (!data.success) throw new Error(data.error || 'Server did not accept the file.');
+        successCount++;
       }
       
       setUploadStatus(`Successfully uploaded ${successCount} file(s).`);
@@ -142,7 +146,8 @@ export const AppProvider = ({ children }) => {
 
   const loadAndPlay = (trackFile) => {
     if (!audioRef.current) return;
-    audioRef.current.src = `${backendUrl}${trackFile.url}`;
+    if (audioRef.current.src?.startsWith('blob:') && audioRef.current.src !== trackFile.url) URL.revokeObjectURL(audioRef.current.src);
+    audioRef.current.src = trackFile.url.startsWith('blob:') ? trackFile.url : `${backendUrl}${trackFile.url}`;
     audioRef.current.load();
     pendingPlayRef.current = true;
   };
@@ -162,7 +167,7 @@ export const AppProvider = ({ children }) => {
   }, [isPlaying, currentTrack]);
 
   const handlePlayTrack = (trackFile) => {
-    if (currentTrack?.name === trackFile.name) {
+    if (currentTrack?.url === trackFile.url && currentTrack?.name === trackFile.name) {
       setIsPlaying(!isPlaying);
     } else {
       loadAndPlay(trackFile);
@@ -177,8 +182,8 @@ export const AppProvider = ({ children }) => {
   };
 
   const handlePlayNext = () => {
-    if (downloads.length === 0) return;
     const activeList = getActiveList();
+    if (activeList.length === 0) return;
     let nextIndex = 0;
     if (currentTrack) {
       const currentIndex = activeList.findIndex(file => file.name === currentTrack.name);
@@ -192,8 +197,8 @@ export const AppProvider = ({ children }) => {
   };
 
   const handlePlayPrev = () => {
-    if (downloads.length === 0) return;
     const activeList = getActiveList();
+    if (activeList.length === 0) return;
     let prevIndex = activeList.length - 1;
     if (currentTrack) {
       const currentIndex = activeList.findIndex(file => file.name === currentTrack.name);
@@ -221,134 +226,165 @@ export const AppProvider = ({ children }) => {
     if (audioRef.current) audioRef.current.volume = vol;
   };
 
-  const fetchSources = useCallback(async () => {
+  const fetchSources = useCallback(async (signal) => {
     try {
-      const res = await fetch(`${backendUrl}/api/sources`);
+      const res = await fetch(`${backendUrl}/api/sources`, { signal });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setSourceFiles(data.sources || []);
+      setSourceFiles(data.sources || []); // keep previous sources visible while a refresh is in flight
     } catch (err) {
-      console.error('Error fetching sources:', err);
+      if (err.name !== 'AbortError') console.error('Error fetching sources:', err);
     }
   }, [backendUrl]);
 
-  const fetchAppleStats = useCallback(async () => {
-    setLoadingAppleStats(true);
+  const fetchAppleStats = useCallback(async (signal) => {
     try {
-      const res = await fetch(`${backendUrl}/api/apple/stats`);
+      const res = await fetch(`${backendUrl}/api/apple/stats`, { signal });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setAppleStats(data);
+      setAppleStats(data); // keep previous stats visible while a refresh is in flight
     } catch (err) {
-      console.error('Error fetching Apple stats:', err);
+      if (err.name !== 'AbortError') console.error('Error fetching Apple stats:', err);
     } finally {
       setLoadingAppleStats(false);
     }
   }, [backendUrl]);
 
-  const fetchStats = useCallback(async () => {
-    setLoadingStats(true);
+  const fetchStats = useCallback(async (signal) => {
     try {
-      const res = await fetch(`${backendUrl}/api/stats`);
+      const res = await fetch(`${backendUrl}/api/stats`, { signal });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setStats(data);
+      setStats(data); // keep previous stats visible while a refresh is in flight
     } catch (err) {
-      console.error('Error fetching stats:', err);
+      if (err.name !== 'AbortError') console.error('Error fetching stats:', err);
     } finally {
       setLoadingStats(false);
     }
   }, [backendUrl]);
 
-  const fetchDownloads = useCallback(async () => {
-    setLoadingDownloads(true);
+  const fetchDownloads = useCallback(async (signal) => {
     try {
-      const res = await fetch(`${backendUrl}/api/downloads?_t=${Date.now()}`);
+      const res = await fetch(`${backendUrl}/api/downloads?_t=${Date.now()}`, { signal });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setDownloads(data.files || []);
+      setDownloads(data.files || []); // keep previous list visible while a refresh is in flight
     } catch (err) {
-      console.error('Error fetching downloads:', err);
+      if (err.name !== 'AbortError') console.error('Error fetching downloads:', err);
     } finally {
       setLoadingDownloads(false);
     }
   }, [backendUrl]);
 
   // ponytail: memoized fetchLogs avoids recreating function identity on every render
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (signal) => {
     try {
-      setLoadingLogs(true);
       const res = await fetch(`${backendUrl}/api/logs?_t=${Date.now()}`, {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache'
-        }
+        },
+        signal
       });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setLogs(data);
+      setLogs(data); // keep previous logs visible while a refresh is in flight
     } catch (err) {
-      console.error('Error fetching logs:', err);
+      if (err.name !== 'AbortError') console.error('Error fetching logs:', err);
     } finally {
       setLoadingLogs(false);
     }
   }, [backendUrl]);
 
-  const checkScraperStatus = useCallback(async () => {
+  const checkScraperStatus = useCallback(async (signal) => {
     try {
-      const res = await fetch(`${backendUrl}/api/scrape/status`);
+      const res = await fetch(`${backendUrl}/api/scrape/status`, { signal });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setScraperStatus(data.status);
+      setScraperStatus(data.status); // keep previous status visible while a refresh is in flight
       setScraperType(data.type);
       setScraperOutput(data.output);
     } catch (err) {
-      console.error('Error checking scraper status:', err);
+      if (err.name !== 'AbortError') console.error('Error checking scraper status:', err);
     }
   }, [backendUrl]);
 
-  const pollScraperStatus = useCallback(async () => {
+  const pollScraperStatus = useCallback(async (signal) => {
     try {
-      const res = await fetch(`${backendUrl}/api/scrape/status`);
+      const res = await fetch(`${backendUrl}/api/scrape/status`, { signal });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setScraperStatus(data.status);
+      if (signal.aborted) return;
       setScraperOutput(data.output);
-      
       pollCounterRef.current += 1;
-      
+
       if (data.status === 'success' || data.status === 'error') {
-        fetchStats();
-        fetchDownloads();
-        fetchLogs();
-      } else if (data.status === 'running') {
-        if (pollCounterRef.current % 2 === 0) {
-          fetchDownloads();
-          fetchLogs();
-        }
+        await Promise.all([fetchStats(signal), fetchDownloads(signal), fetchLogs(signal)]);
+      } else if (data.status === 'running' && pollCounterRef.current % 2 === 0) {
+        await Promise.all([fetchDownloads(signal), fetchLogs(signal)]);
       }
+      // Publish terminal status after the final refresh so effect cleanup cannot abort it.
+      if (!signal.aborted) setScraperStatus(data.status);
+      return data.status;
     } catch (err) {
-      console.error('Error polling status:', err);
+      if (err.name !== 'AbortError') console.error('Error polling status:', err);
     }
   }, [backendUrl, fetchStats, fetchDownloads, fetchLogs]);
 
   useEffect(() => {
+    // Each loader sets state only after its network request settles.
     fetchStats();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAppleStats();
     fetchDownloads();
     fetchLogs();
     fetchSources();
     checkScraperStatus();
 
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
   }, [fetchStats, fetchAppleStats, fetchDownloads, fetchLogs, fetchSources, checkScraperStatus]);
 
   useEffect(() => {
-    if (scraperStatus === 'running') {
-      if (!pollIntervalRef.current) {
-        pollIntervalRef.current = setInterval(pollScraperStatus, 1500);
+    if (scraperStatus !== 'running') return;
+    let stopped = false;
+    let timer = null;
+    let controller = null;
+    pollCounterRef.current = 0;
+
+    const schedule = (delay = 1500) => {
+      if (!stopped && !document.hidden && !controller && timer === null) {
+        timer = setTimeout(tick, delay);
       }
-    } else {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
+    };
+    const tick = async () => {
+      timer = null;
+      if (stopped || document.hidden || controller) return;
+      const request = new AbortController();
+      controller = request;
+      try {
+        const status = await pollScraperStatus(request.signal);
+        if (!request.signal.aborted && status && status !== 'running') stopped = true;
+      } finally {
+        controller = null;
+        schedule(); // wait for status AND its dependent refreshes before the next tick
       }
-    }
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        clearTimeout(timer);
+        timer = null;
+        controller?.abort();
+      } else {
+        schedule(0); // an aborted in-flight request must settle before scheduling
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    schedule();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      controller?.abort();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [scraperStatus, pollScraperStatus]);
 
   const value = {

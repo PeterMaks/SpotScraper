@@ -1,74 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAppContext } from '../AppContext';
 import JoyDivisionVisualizer from '../components/JoyDivisionVisualizer';
-import Icons from '../components/Icons';
 
 export default function VisualizerPage() {
-  const { downloads, currentTrack, handlePlayTrack, handlePlayNext, handlePlayPrev, backendUrl } = useAppContext();
-  const [selectedTrack, setSelectedTrack] = useState(null);
-
-  const audioTracks = (downloads || []).filter(d => /\.(mp3|m4a|flac|wav|ogg|aac)$/i.test(d.name));
-
-  useEffect(() => {
-    if (currentTrack) {
-      setSelectedTrack(currentTrack);
-    } else if (audioTracks.length > 0 && !selectedTrack) {
-      const disorder = audioTracks.find(d => d.name.toLowerCase().includes('disorder'));
-      const blueMonday = audioTracks.find(d => d.name.toLowerCase().includes('blue monday'));
-      setSelectedTrack(disorder || blueMonday || audioTracks[0]);
+  const { downloads, currentTrack, handlePlayTrack } = useAppContext();
+  const [error, setError] = useState('');
+  const tracks = downloads.filter(d => /\.(mp3|m4a|flac|wav|ogg|aac|opus)$/i.test(d.name));
+  const openFile = e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('audio/') && !/\.(mp3|m4a|flac|wav|ogg|aac|opus)$/i.test(file.name)) {
+      setError('Choose a supported audio file.'); return;
     }
-  }, [currentTrack, downloads]);
-
-  const cleanName = (currentTrack || selectedTrack)?.name ? (currentTrack || selectedTrack).name.replace(/\.[^/.]+$/, '') : 'Disorder';
-  const trackTitle = (currentTrack || selectedTrack)?.title || cleanName;
-  const artistName = (currentTrack || selectedTrack)?.artist && (currentTrack || selectedTrack).artist !== 'Unknown Artist' && (currentTrack || selectedTrack).artist !== 'Unknown (Local Cache)'
-    ? (currentTrack || selectedTrack).artist
-    : (cleanName.toLowerCase().includes('disorder') ? 'Joy Division' : ((currentTrack || selectedTrack)?.artist || 'Joy Division'));
-  const activeTrackName = (currentTrack || selectedTrack)?.name || '';
-  const audioSrc = activeTrackName ? `${backendUrl}/api/downloads/file/${encodeURIComponent(activeTrackName)}` : '';
-  const albumArtUrl = activeTrackName ? `${backendUrl}/api/downloads/art/${encodeURIComponent(activeTrackName)}` : '';
-
-  return (
-    <div className="min-h-screen py-4 flex flex-col items-center justify-center animate-in fade-in duration-300">
-      {/* Top Track Selection Pill */}
-      {audioTracks.length > 0 && (
-        <div className="mb-4 flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-neutral-900/80 backdrop-blur-md border border-neutral-800 rounded-full px-3 py-1.5 shadow-lg">
-            <Icons.Music className="size-3.5 text-neutral-400" />
-            <select
-              value={activeTrackName}
-              onChange={(e) => {
-                const found = audioTracks.find(d => d.name === e.target.value);
-                if (found) {
-                  setSelectedTrack(found);
-                  handlePlayTrack(found);
-                }
-              }}
-              aria-label="Select Track"
-              className="bg-transparent border-0 text-neutral-300 text-xs font-mono focus:outline-none cursor-pointer max-w-[260px] truncate"
-            >
-              {audioTracks.map((track) => (
-                <option key={track.name} value={track.name} className="bg-neutral-900 text-white">
-                  {track.title ? `${track.title} • ${track.artist}` : track.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
-
-      {/* Main Visualizer Poster Frame */}
-      <div className="w-full flex items-center justify-center px-4">
-        <JoyDivisionVisualizer
-          trackTitle={trackTitle}
-          artistName={artistName}
-          audioSrc={audioSrc}
-          albumArtUrl={albumArtUrl}
-          onTrackEnd={handlePlayNext}
-          onTrackNext={handlePlayNext}
-          onTrackPrev={handlePlayPrev}
-        />
+    setError('');
+    handlePlayTrack({ name: file.name, title: file.name.replace(/\.[^.]+$/, ''), artist: 'Local audio', url: URL.createObjectURL(file), local: true });
+    e.target.value = '';
+  };
+  return <div className="w-full max-w-[1440px] mx-auto space-y-5 pb-6">
+    <header className="flex flex-wrap items-end justify-between gap-4">
+      <div><p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">Listening room</p><h2 className="text-2xl font-medium tracking-tight">Visualizer</h2></div>
+      <div className="flex flex-wrap gap-3 items-center">
+        <select aria-label="Library track" value={currentTrack?.local ? '' : currentTrack?.name || ''} onChange={e => { const track = tracks.find(t => t.name === e.target.value); if (track) handlePlayTrack(track); }} className="bg-background border border-border rounded-lg px-3 py-2 text-sm max-w-[240px]">
+          <option value="">Choose from library</option>{tracks.map(t => <option key={t.name} value={t.name}>{t.title || t.name}</option>)}
+        </select>
+        <label className="relative cursor-pointer bg-foreground text-background rounded-lg px-4 py-2 text-sm focus-within:outline focus-within:outline-2 focus-within:outline-offset-2">Open audio file<input aria-label="Open audio file" type="file" accept="audio/*,.flac,.opus" onChange={openFile} className="absolute inset-0 opacity-0 w-full cursor-pointer" /></label>
       </div>
-    </div>
-  );
+    </header>
+    {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
+    <JoyDivisionVisualizer />
+    <p className="text-xs text-muted-foreground">Any track played in SpotScraper follows you here. Local files play on this device only; nothing is uploaded.</p>
+  </div>;
 }

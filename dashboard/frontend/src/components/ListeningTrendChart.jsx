@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export default function ListeningTrendChart({ data = [], isAllPlatforms = false }) {
   const [selectedYear, setSelectedYear] = useState('All');
   const [splitPlatforms, setSplitPlatforms] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   // Extract unique years for the dropdown
   const years = useMemo(() => {
