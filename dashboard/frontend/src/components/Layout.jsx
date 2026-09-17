@@ -264,7 +264,7 @@ export default function Layout() {
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-secondary text-secondary-foreground shadow-inner border border-white/10 overflow-hidden relative">
                   <img
                     key={currentTrack.name}
-                    src={`${backendUrl}/api/downloads/art/${encodeURIComponent(currentTrack.name)}`}
+                    src={`${backendUrl}/api/downloads/art/${encodeURIComponent(currentTrack.name)}?v=2`}
                     className="w-full h-full object-cover absolute inset-0 z-10"
                     loading="lazy"
                     onError={(e) => { e.target.style.display = 'none'; }}

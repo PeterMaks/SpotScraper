@@ -264,7 +264,9 @@ app.get('/api/downloads/art/*', async (req, res) => {
     if (picture) {
       res.setHeader('Content-Type', picture.format);
       res.setHeader('Cache-Control', 'private, max-age=3600');
-      res.send(picture.data);
+      // music-metadata returns Uint8Array; Express 4 serializes it as JSON
+      // unless explicitly converted to a binary Buffer.
+      res.send(Buffer.from(picture.data));
     } else {
       res.status(404).json({ error: 'No album art found' });
     }
