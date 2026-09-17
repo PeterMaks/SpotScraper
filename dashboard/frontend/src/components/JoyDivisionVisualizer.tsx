@@ -9,7 +9,8 @@ const COLORS: Record<string, string> = { monochrome: '240,243,246', cyan: '30,22
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem('spotscraper.visualizer.v2') || '{}');
-    return { ...DEFAULTS, ...saved, theme: COLORS[saved.theme] ? saved.theme : 'monochrome',
+    return {
+      ...DEFAULTS, ...saved, theme: COLORS[saved.theme] ? saved.theme : 'monochrome',
       gain: Math.max(0.4, Math.min(2.5, Number(saved.gain) || 1.2)),
       boost: Math.max(0.5, Math.min(5, Number(saved.boost) || 2.2)),
       lines: Math.max(40, Math.min(160, Number(saved.lines) || 100)),
@@ -18,7 +19,8 @@ function loadSettings() {
       softness: Math.max(0.35, Math.min(2, Number(saved.softness) || 0.85)),
       cycles: Math.max(2, Math.min(10, Number(saved.cycles) || 5)),
       settling: Math.max(1, Math.min(6, Number(saved.settling) || 2.4)),
-      mode: ['slices', 'ribbons', 'wireframe'].includes(saved.mode) ? saved.mode : 'slices' };
+      mode: ['slices', 'ribbons', 'wireframe'].includes(saved.mode) ? saved.mode : 'slices'
+    };
   } catch { return DEFAULTS; }
 }
 const time = (n: number) => Number.isFinite(n) ? `${Math.floor(n / 60)}:${Math.floor(n % 60).toString().padStart(2, '0')}` : '0:00';
@@ -101,7 +103,7 @@ export default function JoyDivisionVisualizer() {
         const age = (s.reverse ? history.length - 1 - row : row) / Math.max(1, history.length - 1);
         const contour = s.shape === 'reference' ? referenceContour(slice, age, 1.6, s.softness, s.settling)
           : s.shape === 'waves' ? waveContour(slice, age, 2, s.cycles, s.settling)
-          : interpolateContour(slice).map(v => v * Math.exp(-age * s.settling));
+            : interpolateContour(slice).map(v => v * Math.exp(-age * s.settling));
         return Array.from(contour, (v, c) => projectPoint(c / (contour.length - 1), row / Math.max(1, history.length - 1), v, width, height));
       });
       if (s.mode !== 'ribbons') {
@@ -126,7 +128,7 @@ export default function JoyDivisionVisualizer() {
   }, [audioRef]);
 
   const toggle = async () => {
-    if (!currentTrack) { const first = downloads.find((d: {name: string}) => /\.(mp3|wav|m4a|flac|ogg|aac)$/i.test(d.name)); if (first) handlePlayTrack(first); return; }
+    if (!currentTrack) { const first = downloads.find((d: { name: string }) => /\.(mp3|wav|m4a|flac|ogg|aac)$/i.test(d.name)); if (first) handlePlayTrack(first); return; }
     const audio = audioRef.current;
     if (!audio) return;
     if (!audio.paused) { audio.pause(); setIsPlaying(false); }
