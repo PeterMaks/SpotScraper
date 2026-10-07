@@ -23,7 +23,9 @@ export default function Downloads() {
     handlePlayTrack,
     currentTrack,
     isPlaying,
-    backendUrl
+    backendUrl,
+    isDesktop,
+    revealInExplorer
   } = useAppContext();
 
   const [selectedFiles, setSelectedFiles] = useState(new Set());
@@ -175,10 +177,18 @@ export default function Downloads() {
           <h2 className="text-4xl font-extrabold tracking-tight">Downloads Manager</h2>
           <p className="text-muted-foreground mt-2 text-lg">Manage and play audio files in your local downloads folder</p>
         </div>
-        <Button variant="secondary" onClick={fetchDownloads} disabled={loadingDownloads} size="lg">
-          <svg className="mr-2 size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-          Sync Files
-        </Button>
+        <div className="flex items-center gap-2">
+          {isDesktop && (
+            <Button variant="outline" onClick={() => revealInExplorer('downloads')} size="lg" title="Open downloads folder in File Explorer">
+              <Icons.Folder className="mr-2 size-4" />
+              Open Folder
+            </Button>
+          )}
+          <Button variant="secondary" onClick={fetchDownloads} disabled={loadingDownloads} size="lg">
+            <svg className="mr-2 size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Sync Files
+          </Button>
+        </div>
       </div>
 
       <Card className="bg-card border border-border shadow-sm p-6">
@@ -333,6 +343,11 @@ export default function Downloads() {
                       <TableCell className="text-right text-muted-foreground text-sm py-3 tabular-nums">{duration}</TableCell>
                       <TableCell className="py-3">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {isDesktop && (
+                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); revealInExplorer(`downloads/${file.name}`); }} title="Reveal in File Explorer" className="rounded-lg hover:bg-primary/10 hover:text-primary">
+                              <Icons.Folder className="size-4" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" asChild onClick={(e) => e.stopPropagation()} className="rounded-lg hover:bg-primary/10 hover:text-primary">
                             <a href={`${backendUrl}${file.url}`} download={file.name} title="Save to disk">
                               <Icons.Download className="size-4" />

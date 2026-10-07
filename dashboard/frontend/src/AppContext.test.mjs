@@ -8,6 +8,7 @@ import { transformWithOxc } from 'vite';
 const source = await readFile(new URL('./AppContext.jsx', import.meta.url), 'utf8');
 const { code: compiled } = await transformWithOxc(source
   .replace(/import\s+(?:React,\s*)?\{([^}]+)\}\s+from\s+['"]react['"];?/, 'const {$1} = React;')
+  .replace(/import\s+[^;]+from\s+['"][^'"]*desktop(?:\.js)?['"];?/, 'const isTauri = () => false; const sendDesktopNotification = () => {}; const openNativeFileDialog = () => null; const openNativeFolderDialog = () => null; const revealInExplorer = () => false;')
   .replaceAll('export const ', 'const ')
   .replace('import.meta.env.DEV', 'false') + '\nexports.AppProvider = AppProvider;', 'AppContext.jsx', {
     jsx: { runtime: 'classic' },

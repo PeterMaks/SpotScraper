@@ -1,5 +1,5 @@
-// @refresh reset
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { isTauri, sendDesktopNotification, openNativeFileDialog, openNativeFolderDialog, revealInExplorer } from './lib/desktop';
 
 const AppContext = createContext();
 
@@ -92,6 +92,7 @@ export const AppProvider = ({ children }) => {
   const [loadingLogs, setLoadingLogs] = useState(true);
 
   const pollCounterRef = useRef(0);
+  const prevScraperStatusRef = useRef('idle');
 
   const backendUrl = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
@@ -319,10 +320,18 @@ export const AppProvider = ({ children }) => {
       pollCounterRef.current += 1;
 
       if (data.status === 'success' || data.status === 'error') {
+        if (prevScraperStatusRef.current === 'running') {
+          if (data.status === 'success') {
+            sendDesktopNotification('SpotScraper', 'Media scrape and download completed successfully!');
+          } else {
+            sendDesktopNotification('SpotScraper', 'Download process completed with errors.');
+          }
+        }
         await Promise.all([fetchStats(signal), fetchDownloads(signal), fetchLogs(signal)]);
       } else if (data.status === 'running' && pollCounterRef.current % 2 === 0) {
         await Promise.all([fetchDownloads(signal), fetchLogs(signal)]);
       }
+      prevScraperStatusRef.current = data.status;
       // Publish terminal status after the final refresh so effect cleanup cannot abort it.
       if (!signal.aborted) setScraperStatus(data.status);
       return data.status;
@@ -417,7 +426,12 @@ export const AppProvider = ({ children }) => {
     getAnalyserNode,
     handlePlayTrack, handlePlayNext, handlePlayPrev,
     handleLoadedMetadata, handleSeek, handleVolumeChange,
-    backendUrl
+    backendUrl,
+    isDesktop: isTauri(),
+    openNativeFileDialog,
+    openNativeFolderDialog,
+    revealInExplorer,
+    sendDesktopNotification
   };
 
   return (

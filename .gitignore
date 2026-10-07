@@ -100,3 +100,6 @@ DESIGN.md
 .claudecode/
 .github/skills/
 PRODUCT.md
+2026-09-17_145939-spotscraper-rust.md
+src-tauri/target/
+dashboard/src-tauri/target/
