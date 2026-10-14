@@ -97,7 +97,28 @@ export const AppProvider = ({ children }) => {
   const backendUrl = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
   const handleFileUpload = async (event) => {
-    const files = event.target.files;
+    if (isTauri() && !event?.target?.files) {
+      try {
+        setUploading(true);
+        setUploadStatus('Importing files...');
+        const count = await openNativeFileDialog('spotify');
+        if (count > 0) {
+          setUploadStatus(`Successfully imported ${count} file(s).`);
+          fetchStats();
+          fetchSources();
+        } else {
+          setUploadStatus('');
+        }
+      } catch (err) {
+        setUploadStatus(`Import failed: ${err.message}`);
+      } finally {
+        setUploading(false);
+        setTimeout(() => setUploadStatus(''), 5000);
+      }
+      return;
+    }
+
+    const files = event?.target?.files;
     if (!files || files.length === 0) return;
 
     for (const file of files) {
@@ -148,7 +169,7 @@ export const AppProvider = ({ children }) => {
   const loadAndPlay = (trackFile) => {
     if (!audioRef.current) return;
     if (audioRef.current.src?.startsWith('blob:') && audioRef.current.src !== trackFile.url) URL.revokeObjectURL(audioRef.current.src);
-    audioRef.current.src = trackFile.url.startsWith('blob:') ? trackFile.url : `${backendUrl}${trackFile.url}`;
+    audioRef.current.src = trackFile.streamUrl || (trackFile.url.startsWith('blob:') ? trackFile.url : `${backendUrl}${trackFile.url}`);
     audioRef.current.load();
     pendingPlayRef.current = true;
   };
@@ -228,6 +249,16 @@ export const AppProvider = ({ children }) => {
   };
 
   const fetchSources = useCallback(async (signal) => {
+    if (isTauri()) {
+      try {
+        const desktop = await import('./lib/desktop');
+        const sources = await desktop.fetchSourcesNative();
+        setSourceFiles(Array.isArray(sources) ? sources : (sources?.sources || []));
+      } catch (err) {
+        console.error('Error fetching native sources:', err);
+      }
+      return;
+    }
     try {
       const res = await fetch(`${backendUrl}/api/sources`, { signal });
       if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
@@ -239,6 +270,18 @@ export const AppProvider = ({ children }) => {
   }, [backendUrl]);
 
   const fetchAppleStats = useCallback(async (signal) => {
+    if (isTauri()) {
+      try {
+        const desktop = await import('./lib/desktop');
+        const data = await desktop.fetchAppleStatsNative(true);
+        setAppleStats(data);
+      } catch (err) {
+        console.error('Error fetching native Apple stats:', err);
+      } finally {
+        setLoadingAppleStats(false);
+      }
+      return;
+    }
     try {
       const res = await fetch(`${backendUrl}/api/apple/stats`, { signal });
       if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
@@ -252,6 +295,18 @@ export const AppProvider = ({ children }) => {
   }, [backendUrl]);
 
   const fetchStats = useCallback(async (signal) => {
+    if (isTauri()) {
+      try {
+        const desktop = await import('./lib/desktop');
+        const data = await desktop.fetchSpotifyStatsNative(true);
+        setStats(data);
+      } catch (err) {
+        console.error('Error fetching native stats:', err);
+      } finally {
+        setLoadingStats(false);
+      }
+      return;
+    }
     try {
       const res = await fetch(`${backendUrl}/api/stats`, { signal });
       if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
@@ -265,6 +320,18 @@ export const AppProvider = ({ children }) => {
   }, [backendUrl]);
 
   const fetchDownloads = useCallback(async (signal) => {
+    if (isTauri()) {
+      try {
+        const desktop = await import('./lib/desktop');
+        const files = await desktop.fetchDownloadsNative();
+        setDownloads(files || []);
+      } catch (err) {
+        console.error('Error fetching native downloads:', err);
+      } finally {
+        setLoadingDownloads(false);
+      }
+      return;
+    }
     try {
       const res = await fetch(`${backendUrl}/api/downloads?_t=${Date.now()}`, { signal });
       if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
@@ -279,6 +346,18 @@ export const AppProvider = ({ children }) => {
 
   // ponytail: memoized fetchLogs avoids recreating function identity on every render
   const fetchLogs = useCallback(async (signal) => {
+    if (isTauri()) {
+      try {
+        const desktop = await import('./lib/desktop');
+        const data = await desktop.fetchDetailedLogsNative();
+        setLogs(data || { downloadLinks: {}, scrapeLog: {} });
+      } catch (err) {
+        console.error('Error fetching native logs:', err);
+      } finally {
+        setLoadingLogs(false);
+      }
+      return;
+    }
     try {
       const res = await fetch(`${backendUrl}/api/logs?_t=${Date.now()}`, {
         headers: {
@@ -298,6 +377,7 @@ export const AppProvider = ({ children }) => {
   }, [backendUrl]);
 
   const checkScraperStatus = useCallback(async (signal) => {
+    if (isTauri()) return;
     try {
       const res = await fetch(`${backendUrl}/api/scrape/status`, { signal });
       if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
@@ -353,7 +433,43 @@ export const AppProvider = ({ children }) => {
   }, [fetchStats, fetchAppleStats, fetchDownloads, fetchLogs, fetchSources, checkScraperStatus]);
 
   useEffect(() => {
-    if (scraperStatus !== 'running') return;
+    if (!isTauri()) return;
+    let unsub = null;
+    (async () => {
+      try {
+        const desktop = await import('./lib/desktop');
+        unsub = await desktop.subscribeScraperEvents({
+          onLog: (line) => {
+            setScraperOutput((prev) => (prev ? `${prev}\n${line}` : line));
+          },
+          onStatus: (status) => {
+            if (status?.is_running !== undefined) {
+              setScraperStatus(status.is_running ? 'running' : 'idle');
+            }
+          },
+          onComplete: (payload) => {
+            setScraperStatus(payload?.exit_code === 0 ? 'success' : 'error');
+            if (payload?.exit_code === 0) {
+              sendDesktopNotification('SpotScraper', 'Media scrape completed successfully!');
+            } else {
+              sendDesktopNotification('SpotScraper', payload?.message || 'Download process finished with errors.');
+            }
+            fetchDownloads();
+            fetchLogs();
+            fetchStats();
+          },
+        });
+      } catch (err) {
+        console.error('Error subscribing to scraper events:', err);
+      }
+    })();
+    return () => {
+      if (unsub && typeof unsub === 'function') unsub();
+    };
+  }, [fetchDownloads, fetchLogs, fetchStats]);
+
+  useEffect(() => {
+    if (isTauri() || scraperStatus !== 'running') return;
     let stopped = false;
     let timer = null;
     let controller = null;

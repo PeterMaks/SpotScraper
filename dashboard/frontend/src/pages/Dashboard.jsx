@@ -200,10 +200,56 @@ export default function Dashboard() {
     uploading,
     handleFileUpload,
     backendUrl,
+    isDesktop,
+    openNativeFileDialog,
+    fetchSources,
+    setUploadStatus,
+    setUploading,
   } = useAppContext();
 
   const [appleUploading, setAppleUploading] = useState(false);
   const [appleUploadStatus, setAppleUploadStatus] = useState('');
+
+  const triggerNativeAppleImport = async () => {
+    if (!isDesktop || !openNativeFileDialog) return;
+    try {
+      setAppleUploading(true);
+      setAppleUploadStatus('Importing Apple Music files...');
+      const count = await openNativeFileDialog('apple');
+      if (count > 0) {
+        setAppleUploadStatus(`Imported ${count} file(s). Refreshing...`);
+        fetchAppleStats();
+      } else {
+        setAppleUploadStatus('');
+      }
+    } catch (err) {
+      setAppleUploadStatus(`Import failed: ${err.message}`);
+    } finally {
+      setAppleUploading(false);
+      setTimeout(() => setAppleUploadStatus(''), 5000);
+    }
+  };
+
+  const triggerNativeSpotifyImport = async () => {
+    if (!isDesktop || !openNativeFileDialog) return;
+    try {
+      setUploading(true);
+      setUploadStatus('Importing Spotify files...');
+      const count = await openNativeFileDialog('spotify');
+      if (count > 0) {
+        setUploadStatus(`Imported ${count} file(s). Refreshing...`);
+        fetchStats();
+        if (fetchSources) fetchSources();
+      } else {
+        setUploadStatus('');
+      }
+    } catch (err) {
+      setUploadStatus(`Import failed: ${err.message}`);
+    } finally {
+      setUploading(false);
+      setTimeout(() => setUploadStatus(''), 5000);
+    }
+  };
 
   const handleAppleUpload = async (e) => {
     const files = e.target.files;
@@ -284,7 +330,19 @@ export default function Dashboard() {
                 <label className="cursor-pointer">
                   <svg className="mr-2 size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                   Choose Files
-                  <input type="file" multiple accept=".json,.csv" onChange={handleFileUpload} className="hidden" disabled={uploading} />
+                  <input
+                    type="file"
+                    multiple
+                    accept=".json,.csv"
+                    onClick={async (e) => {
+                      if (!isDesktop) return;
+                      e.preventDefault();
+                      await triggerNativeSpotifyImport();
+                    }}
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    disabled={uploading}
+                  />
                 </label>
               </Button>
               {uploadStatus && (
@@ -305,7 +363,19 @@ export default function Dashboard() {
                 <label className="cursor-pointer">
                   <svg className="mr-2 size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                   Choose Files
-                  <input type="file" multiple accept=".csv,.json" onChange={handleAppleUpload} className="hidden" disabled={appleUploading} />
+                  <input
+                    type="file"
+                    multiple
+                    accept=".csv,.json"
+                    onClick={async (e) => {
+                      if (!isDesktop) return;
+                      e.preventDefault();
+                      await triggerNativeAppleImport();
+                    }}
+                    onChange={handleAppleUpload}
+                    className="hidden"
+                    disabled={appleUploading}
+                  />
                 </label>
               </Button>
               {appleUploadStatus && (

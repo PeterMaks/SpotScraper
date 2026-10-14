@@ -82,7 +82,31 @@ export default function Layout() {
     handleLoadedMetadata,
     handleVolumeChange,
     backendUrl,
+    isDesktop,
   } = useAppContext();
+
+  const [currentCover, setCurrentCover] = useState(null);
+
+  useEffect(() => {
+    if (!isDesktop || !currentTrack) {
+      setCurrentCover(null);
+      return;
+    }
+    let active = true;
+    (async () => {
+      const target = currentTrack.filePath || currentTrack.url;
+      if (target) {
+        try {
+          const { fetchTrackCoverNative } = await import('../lib/desktop');
+          const dataUrl = await fetchTrackCoverNative(target);
+          if (active) setCurrentCover(dataUrl);
+        } catch {
+          if (active) setCurrentCover(null);
+        }
+      }
+    })();
+    return () => { active = false; };
+  }, [isDesktop, currentTrack]);
 
   // Mounted state for audio player slide-up entrance
   const [playerVisible, setPlayerVisible] = useState(false);
@@ -262,14 +286,16 @@ export default function Layout() {
             >
               <div className="flex items-center gap-4 shrink min-w-0 flex-1">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-secondary text-secondary-foreground shadow-inner border border-white/10 overflow-hidden relative">
-                  <img
-                    key={currentTrack.name}
-                    src={`${backendUrl}/api/downloads/art/${encodeURIComponent(currentTrack.name)}?v=2`}
-                    className="w-full h-full object-cover absolute inset-0 z-10"
-                    loading="lazy"
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                    alt=""
-                  />
+                  {(!isDesktop || currentCover) && (
+                    <img
+                      key={currentTrack.name}
+                      src={isDesktop ? currentCover : `${backendUrl}/api/downloads/art/${encodeURIComponent(currentTrack.name)}?v=2`}
+                      className="w-full h-full object-cover absolute inset-0 z-10"
+                      loading="lazy"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                      alt=""
+                    />
+                  )}
                   <Icons.Music className="size-6 drop-shadow-md absolute z-0" />
                 </div>
                 <div className="flex flex-col overflow-hidden">

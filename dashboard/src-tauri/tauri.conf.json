@@ -4,41 +4,66 @@
   "version": "1.0.0",
   "identifier": "com.spotscraper.desktop",
   "build": {
-    "frontendDist": "../frontend/dist",
+    "beforeDevCommand": "npm --prefix frontend run dev",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev:all",
-    "beforeBuildCommand": "npm --prefix frontend run build"
+    "beforeBuildCommand": "npm --prefix frontend run build",
+    "frontendDist": "../frontend/dist"
   },
   "app": {
     "windows": [
       {
         "label": "main",
         "title": "SpotScraper",
-        "width": 1320,
-        "height": 860,
-        "minWidth": 960,
-        "minHeight": 640,
-        "center": true,
+        "width": 1280,
+        "height": 840,
+        "minWidth": 900,
+        "minHeight": 600,
         "resizable": true,
-        "fullscreen": false
+        "decorations": true,
+        "theme": "Dark",
+        "center": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: asset: http://asset.localhost https://asset.localhost http://localhost:3001; media-src 'self' blob: asset: http://asset.localhost https://asset.localhost http://localhost:3001; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost https://asset.localhost http://localhost:3001 ws://localhost:5173;",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**/*"]
+      }
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "targets": ["nsis", "msi"],
+    "externalBin": [
+      "binaries/spotscraper-engine"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "android": {
-      "debugApplicationIdSuffix": ".debug"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc4NkRFN0QyRUMzQTMzQjQKUldTME16cnMwdWR0ZUxtVDVGY0lFRGVEQ0lOOStTb09qZ01paWdiWW1WQk55bTlxU1YzYWtFTFIK",
+      "endpoints": [
+        "https://github.com/PeterMaks/SpotScraper/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

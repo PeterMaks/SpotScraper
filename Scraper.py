@@ -22,12 +22,26 @@ import openpyxl
 import logging
 from pythonjsonlogger import jsonlogger
 
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-if hasattr(sys.stderr, 'reconfigure'):
-    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+if sys.stdout is not None and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
+if sys.stderr is not None and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
 
-DATA_DIR = os.path.abspath(os.environ.get('DATA_DIR', os.path.dirname(__file__)))
+def get_bundled_ffmpeg_dir():
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        meipass_dir = pathlib.Path(getattr(sys, "_MEIPASS"))
+        if (meipass_dir / "ffmpeg.exe").exists() or (meipass_dir / "ffmpeg").exists():
+            return str(meipass_dir)
+    repo_root = pathlib.Path(__file__).resolve().parent
+    if (repo_root / "ffmpeg.exe").exists() or (repo_root / "ffmpeg").exists():
+        return str(repo_root)
+    return None
+
+DATA_DIR = os.path.abspath(
+    os.environ.get('DATA_DIR')
+    or os.environ.get('SPOTSCRAPER_DATA_DIR')
+    or (os.getcwd() if getattr(sys, 'frozen', False) else os.path.dirname(__file__))
+)
 os.makedirs(DATA_DIR, exist_ok=True)
 log_handler = logging.FileHandler(os.path.join(DATA_DIR, 'scrape_audit.log'))
 formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s')
@@ -37,6 +51,9 @@ logger.setLevel(logging.INFO)
 logger.addHandler(log_handler)
 
 CACHE_FILE = os.path.join(DATA_DIR, 'download_cache.json')
+DOWNLOAD_LINKS_FILE = os.path.join(DATA_DIR, 'download_links.json')
+SCRAPE_LOG_FILE = os.path.join(DATA_DIR, 'scrape_log.json')
+_log_file_lock = threading.Lock()
 
 def load_cache():
     if os.path.exists(CACHE_FILE):
@@ -47,25 +64,44 @@ def load_cache():
             return {}
     return {}
 
-def save_cache(cache_dict):
+def _atomic_write_json(target_path, data_dict):
     try:
-        os.makedirs(DATA_DIR, exist_ok=True)
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
         name = None
         try:
-            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=DATA_DIR, delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=os.path.dirname(target_path), delete=False) as f:
                 name = f.name
-                json.dump(cache_dict, f, indent=4, ensure_ascii=False)
+                json.dump(data_dict, f, indent=4, ensure_ascii=False)
                 f.flush()
                 os.fsync(f.fileno())
-            os.replace(name, CACHE_FILE)
+            os.replace(name, target_path)
         finally:
             if name and os.path.exists(name):
                 os.unlink(name)
     except Exception as e:
-        print(f"Error saving cache: {e}")
+        print(f"Error saving {target_path}: {e}")
+
+def save_cache(cache_dict):
+    _atomic_write_json(CACHE_FILE, cache_dict)
+
+def _update_disk_log(filepath, key, value):
+    with _log_file_lock:
+        current = {}
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    current = json.load(f)
+            except Exception:
+                current = {}
+        current[key] = value
+        _atomic_write_json(filepath, current)
 
 def _post_log(url, payload):
     token = os.environ.get('SCRAPER_INTERNAL_TOKEN', '')
+    if not token:
+        # In Tauri / standalone CLI mode, there is no Express webhook server;
+        # logs are already persisted directly to DATA_DIR on disk.
+        return
     headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {token}'}
     req = urllib.request.Request(url, data=payload, headers=headers)
     try:
@@ -74,12 +110,15 @@ def _post_log(url, payload):
     except Exception as e:
         print(f"Error emitting log: {e}")
 
-# ponytail: derive scrapeLog status string from downloadLinks data inside emit_log
-# so every call site gets both logs for free — no shotgun surgery across 10+ sites
 def emit_log(log_type, key, data):
     if isinstance(data, dict):
         data['source'] = 'api'
-    
+
+    if log_type == 'downloadLinks':
+        _update_disk_log(DOWNLOAD_LINKS_FILE, key, data)
+    elif log_type == 'scrapeLog':
+        _update_disk_log(SCRAPE_LOG_FILE, key, data)
+
     url = os.environ.get('SCRAPER_LOG_URL', 'http://localhost:3001/api/internal/log')
     payload = json.dumps({
         "type": log_type,
@@ -99,6 +138,7 @@ def emit_log(log_type, key, data):
             'error': f'Failed: {error}' if error else 'Failed',
         }
         scrape_status = status_map.get(status, status)
+        _update_disk_log(SCRAPE_LOG_FILE, key, scrape_status)
         sl_payload = json.dumps({
             "type": "scrapeLog",
             "key": key,
@@ -592,7 +632,7 @@ def resolve_item(item_dict, idx, total, downloads_dir, persistent_cache, dir_cac
 
     search_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    ffmpeg_dir = r"C:\Users\ADMIN\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
+    ffmpeg_dir = get_bundled_ffmpeg_dir() or r"C:\Users\ADMIN\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
     if not (ffmpeg_dir and os.path.exists(ffmpeg_dir)):
         try:
             import imageio_ffmpeg
@@ -1029,7 +1069,7 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
     """
     results = {}
     total_items = len(download_list)
-    downloads_dir = os.path.join(os.getcwd(), 'downloads')
+    downloads_dir = os.environ.get('SPOTSCRAPER_DOWNLOAD_DIR') or os.path.join(os.getcwd(), 'downloads')
     os.makedirs(downloads_dir, exist_ok=True)
 
     persistent_cache = load_cache()
@@ -1069,6 +1109,10 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
 
 
 if __name__ == "__main__":
+    if "--version-check" in sys.argv:
+        print(f"spotscraper-engine v1.0.0 | yt-dlp {yt_dlp.version.__version__} | frozen={getattr(sys, 'frozen', False)}", flush=True)
+        sys.exit(0)
+
     if "--selfcheck" in sys.argv:
         assert is_artist_match("Daft Punk", "Around the World - Daft Punk (Official)", "Daft Punk", None)
         assert is_artist_match("The Weeknd", "Blinding Lights (The Weeknd)", "TheWeeknd VEVO", None)
@@ -1078,57 +1122,105 @@ if __name__ == "__main__":
         print("Self-check passed.")
         sys.exit(0)
 
+    # Parse named CLI flags if provided
+    named_query = None
+    named_limit = None
+    named_data_dir = None
+    named_output_dir = None
+    named_source = None
+    positional_args = []
+
+    idx = 1
+    while idx < len(sys.argv):
+        arg = sys.argv[idx]
+        if arg == "--query" and idx + 1 < len(sys.argv):
+            named_query = sys.argv[idx + 1]
+            idx += 2
+        elif arg == "--limit" and idx + 1 < len(sys.argv):
+            try:
+                named_limit = int(sys.argv[idx + 1])
+            except ValueError:
+                pass
+            idx += 2
+        elif arg == "--data-dir" and idx + 1 < len(sys.argv):
+            named_data_dir = sys.argv[idx + 1]
+            idx += 2
+        elif arg == "--output-dir" and idx + 1 < len(sys.argv):
+            named_output_dir = sys.argv[idx + 1]
+            idx += 2
+        elif arg == "--source" and idx + 1 < len(sys.argv):
+            named_source = sys.argv[idx + 1]
+            idx += 2
+        else:
+            positional_args.append(arg)
+            idx += 1
+
+    if named_data_dir:
+        DATA_DIR = os.path.abspath(named_data_dir)
+        os.makedirs(DATA_DIR, exist_ok=True)
+        CACHE_FILE = os.path.join(DATA_DIR, 'download_cache.json')
+        DOWNLOAD_LINKS_FILE = os.path.join(DATA_DIR, 'download_links.json')
+        SCRAPE_LOG_FILE = os.path.join(DATA_DIR, 'scrape_log.json')
+
+    if named_output_dir:
+        os.environ['SPOTSCRAPER_DOWNLOAD_DIR'] = named_output_dir
+
     # 1. Define the folder containing your Spotify History JSONs / CSVs
-    json_folder = 'spotify_data' if os.path.exists('spotify_data') else 'json_directory'
-    
+    if named_data_dir:
+        spotify_subdir = os.path.join(named_data_dir, 'spotify_data')
+        json_folder = spotify_subdir if os.path.isdir(spotify_subdir) else named_data_dir
+    else:
+        json_folder = 'spotify_data' if os.path.exists('spotify_data') else 'json_directory'
+
     default_url = "https://qobuz.squid.wtf"
     target_website = default_url
     items_to_download = []
-    test_limit = 3
-    is_single_query = False
+    test_limit = named_limit if named_limit is not None else 3
+    is_single_query = bool(named_query)
 
-    if len(sys.argv) > 1 and sys.argv[1] == "query":
-        is_single_query = True
-        if len(sys.argv) > 2:
-            items_to_download = [{"query": sys.argv[2], "track": "", "artist": "", "playlist": ""}]
-        else:
-            items_to_download = [{"query": "Test Track", "track": "", "artist": "", "playlist": ""}]
+    if named_query:
+        items_to_download = [{"query": named_query, "track": "", "artist": "", "playlist": ""}]
         test_limit = 1
-        if len(sys.argv) > 3:
-            target_website = sys.argv[3].strip()
+    elif len(positional_args) >= 1 and positional_args[0] == "query":
+        is_single_query = True
+        q_val = positional_args[1] if len(positional_args) > 1 else "Test Track"
+        items_to_download = [{"query": q_val, "track": "", "artist": "", "playlist": ""}]
+        test_limit = 1
+        if len(positional_args) > 2:
+            target_website = positional_args[2].strip()
     else:
         if not os.path.exists(json_folder):
             print(f"Please create a folder named '{json_folder}' and put your JSONs/CSVs there.")
-            exit()
-            
-        specific_file = None
-        if len(sys.argv) > 3:
-            specific_file = sys.argv[3].strip()
-            
+            sys.exit(1)
+
+        specific_file = os.path.basename(named_source) if named_source else None
+        if not specific_file and len(positional_args) > 2:
+            specific_file = os.path.basename(positional_args[2].strip())
+
         items_to_download = parse_spotify_data(json_folder, specific_file=specific_file)
         print(f"Parsed files. Found {len(items_to_download)} unique items to download.")
-        
+
         if not items_to_download:
             print("No valid Spotify streams or custom CSV items found.")
-            exit()
-            
-        if len(sys.argv) > 1:
+            sys.exit(0)
+
+        if named_limit is None and len(positional_args) > 0:
             try:
-                test_limit = int(sys.argv[1])
+                test_limit = int(positional_args[0])
             except ValueError:
-                print(f"Invalid limit argument: {sys.argv[1]}. Using default of 3.")
-                
-        if len(sys.argv) > 2:
-            target_website = sys.argv[2].strip()
-            
+                print(f"Invalid limit argument: {positional_args[0]}. Using default of 3.")
+
+        if len(positional_args) > 1:
+            target_website = positional_args[1].strip()
+
     if is_single_query:
         print(f"\nRunning single search and download for query: {items_to_download[0]['query']}...")
         logger.info("Scraper execution started (single query)", extra={"target_website": target_website, "query": items_to_download[0]['query']})
     else:
         print(f"\nRunning test on first {test_limit} items...")
         logger.info("Scraper execution started (batch)", extra={"target_website": target_website, "limit": test_limit, "total_found": len(items_to_download)})
-    
+
     download_links = search_and_scrape(items_to_download if test_limit == 0 else items_to_download[:test_limit], target_website, is_single_query=is_single_query)
-    
+
     print("\nDownload complete. Check the 'downloads' folder!")
     logger.info("Scraper execution finished")

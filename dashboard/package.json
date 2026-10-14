@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "concurrently \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
     "dev:all": "concurrently \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "build:frontend": "npm --prefix frontend run build",
+    "build:sidecar": "powershell -ExecutionPolicy Bypass -File ./scripts/build-sidecar.ps1",
+    "build:all": "npm run build:sidecar && npm run build:frontend",
     "backend": "npm --prefix backend run dev",
     "frontend": "npm --prefix frontend run dev",
     "start": "concurrently \"npm --prefix backend start\" \"npm --prefix frontend run dev\"",
@@ -26,6 +29,8 @@
     "@tauri-apps/plugin-dialog": "^2.8.1",
     "@tauri-apps/plugin-fs": "^2.6.0",
     "@tauri-apps/plugin-notification": "^2.5.1",
-    "@tauri-apps/plugin-opener": "^2.7.0"
+    "@tauri-apps/plugin-opener": "^2.7.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.13.3"
   }
 }

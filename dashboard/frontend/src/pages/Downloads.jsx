@@ -1,5 +1,5 @@
 
-import { useState, useDeferredValue, useTransition } from 'react';
+import { useState, useEffect, useDeferredValue, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../AppContext';
@@ -25,11 +25,36 @@ export default function Downloads() {
     isPlaying,
     backendUrl,
     isDesktop,
-    revealInExplorer
+    revealInExplorer,
+    openNativeFolderDialog
   } = useAppContext();
 
   const [selectedFiles, setSelectedFiles] = useState(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
+  const [coverArtMap, setCoverArtMap] = useState({});
+
+  useEffect(() => {
+    if (!isDesktop || !downloads.length) return;
+    let active = true;
+    (async () => {
+      try {
+        const { fetchTrackCoverNative } = await import('../lib/desktop');
+        for (const track of downloads) {
+          if (!active) break;
+          const target = track.filePath || track.url;
+          if (target && !coverArtMap[track.name]) {
+            const dataUrl = await fetchTrackCoverNative(target);
+            if (dataUrl && active) {
+              setCoverArtMap(prev => ({ ...prev, [track.name]: dataUrl }));
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error loading native track covers:', err);
+      }
+    })();
+    return () => { active = false; };
+  }, [isDesktop, downloads]);
 
   const deferredSearch = useDeferredValue(downloadsSearch);
   const [, startTransition] = useTransition();
@@ -44,6 +69,19 @@ export default function Downloads() {
     setScraperStatus('running');
     setScraperOutput(`Starting single download for query: "${searchQuery}"...\n`);
     navigate('/scraper'); // Switch to terminal to watch download
+
+    if (isDesktop) {
+      try {
+        const { startScraperNative } = await import('../lib/desktop');
+        await startScraperNative({ query: searchQuery });
+        setQueryStatus('Download process started');
+        setSearchQuery('');
+      } catch (err) {
+        setQueryStatus(`Error: ${err.message}`);
+        setScraperStatus('error');
+      }
+      return;
+    }
 
     try {
       const res = await fetch(`${backendUrl}/api/scrape/start`, {
@@ -70,6 +108,19 @@ export default function Downloads() {
 
   const handleDeleteFile = async (filename) => {
     if (!window.confirm(`Are you sure you want to delete ${filename}?`)) return;
+
+    if (isDesktop) {
+      try {
+        const track = downloads.find(f => f.name === filename);
+        const targetPath = track?.filePath || track?.url || filename;
+        const { deleteDownloadNative } = await import('../lib/desktop');
+        await deleteDownloadNative(targetPath);
+        fetchDownloads();
+      } catch (err) {
+        console.error('Error deleting native download:', err);
+      }
+      return;
+    }
 
     try {
       const res = await fetch(`${backendUrl}/api/downloads/file/${encodeURIComponent(filename)}`, {
@@ -119,6 +170,22 @@ export default function Downloads() {
 
   const handleBatchDelete = async () => {
     if (!window.confirm(`Are you sure you want to delete ${selectedFiles.size} files?`)) return;
+
+    if (isDesktop) {
+      try {
+        const { deleteDownloadNative } = await import('../lib/desktop');
+        for (const filename of selectedFiles) {
+          const track = downloads.find(f => f.name === filename);
+          const targetPath = track?.filePath || track?.url || filename;
+          await deleteDownloadNative(targetPath);
+        }
+        setSelectedFiles(new Set());
+        fetchDownloads();
+      } catch (err) {
+        console.error('Error batch deleting native files:', err);
+      }
+      return;
+    }
 
     try {
       for (const filename of selectedFiles) {
@@ -231,6 +298,19 @@ export default function Downloads() {
             className="pl-10 h-11"
           />
         </div>
+        {isDesktop && (
+          <Button
+            variant="outline"
+            className="h-11 press-scale rounded-xl"
+            onClick={async () => {
+              const dir = await openNativeFolderDialog();
+              if (dir) fetchDownloads();
+            }}
+          >
+            <Icons.Folder className="size-4 mr-2" />
+            Change Download Folder
+          </Button>
+        )}
       </div>
 
       <Card className="border border-border shadow-sm overflow-hidden rounded-2xl backdrop-blur-xl">
@@ -323,13 +403,15 @@ export default function Downloads() {
                       <TableCell className="py-3">
                         <div className="flex items-center gap-3">
                           <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground overflow-hidden relative border border-border">
-                            <img 
-                              src={`${backendUrl}/api/downloads/art/${encodeURIComponent(file.name)}`} 
-                              className="w-full h-full object-cover absolute inset-0 z-10" 
-                              loading="lazy"
-                              onError={(e) => { e.target.style.display = 'none'; }}
-                              alt=""
-                            />
+                            {(!isDesktop || coverArtMap[file.name]) && (
+                              <img 
+                                src={isDesktop ? coverArtMap[file.name] : `${backendUrl}/api/downloads/art/${encodeURIComponent(file.name)}`} 
+                                className="w-full h-full object-cover absolute inset-0 z-10" 
+                                loading="lazy"
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                                alt=""
+                              />
+                            )}
                             <Icons.Music className="size-5 absolute z-0 text-muted-foreground" />
                           </div>
                           <div className="flex flex-col">

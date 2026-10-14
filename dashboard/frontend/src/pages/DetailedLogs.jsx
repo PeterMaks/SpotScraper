@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 
 export default function DetailedLogs() {
-  const { logs, fetchLogs, loadingLogs, logsFilter, setLogsFilter, logsSearch, setLogsSearch, backendUrl } = useAppContext();
+  const { logs, fetchLogs, loadingLogs, logsFilter, setLogsFilter, logsSearch, setLogsSearch, backendUrl, isDesktop } = useAppContext();
   const [selectedLogs, setSelectedLogs] = useState(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
 
@@ -134,6 +134,19 @@ export default function DetailedLogs() {
 
   const handleBatchDelete = async () => {
     if (!window.confirm(`Are you sure you want to archive ${selectedLogs.size} logs?`)) return;
+
+    if (isDesktop) {
+      try {
+        const { deleteLogsBatchNative } = await import('../lib/desktop');
+        await deleteLogsBatchNative(Array.from(selectedLogs));
+        setSelectedLogs(new Set());
+        fetchLogs();
+      } catch (err) {
+        console.error('Error batch deleting native logs:', err);
+      }
+      return;
+    }
+
     try {
       const res = await fetch(`${backendUrl}/api/logs/delete-batch`, {
         method: 'POST',
@@ -149,6 +162,19 @@ export default function DetailedLogs() {
 
   const handleClearAll = async () => {
     if (!window.confirm('Are you sure you want to clear ALL logs? They will be archived.')) return;
+
+    if (isDesktop) {
+      try {
+        const { clearAllLogsNative } = await import('../lib/desktop');
+        await clearAllLogsNative();
+        setSelectedLogs(new Set());
+        fetchLogs();
+      } catch (err) {
+        console.error('Error clearing native logs:', err);
+      }
+      return;
+    }
+
     try {
       const res = await fetch(`${backendUrl}/api/logs/clear`, { method: 'POST' });
       if (res.ok) {

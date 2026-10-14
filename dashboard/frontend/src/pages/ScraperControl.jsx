@@ -22,7 +22,7 @@ const parseProgress = (output) => {
 
   const lines = output.split('\n');
   for (let line of lines) {
-    const progMatch = line.match(/Processing \[(\d+)\/(\d+)\]/);
+    const progMatch = line.match(/(?:Processing|Searching|Downloading) \[(\d+)\/(\d+)\]/);
     if (progMatch) {
       current = parseInt(progMatch[1], 10);
       total = parseInt(progMatch[2], 10);
@@ -102,7 +102,8 @@ export default function ScraperControl() {
     selectedSource, setSelectedSource,
     sourceFiles,
     backendUrl,
-    checkScraperStatus
+    checkScraperStatus,
+    isDesktop,
   } = useAppContext();
 
   const terminalEndRef = useRef(null);
@@ -120,6 +121,20 @@ export default function ScraperControl() {
 
     setScraperStatus('running');
     setScraperOutput('Initializing scraper...\n');
+
+    if (isDesktop) {
+      try {
+        const { startScraperNative } = await import('../lib/desktop');
+        await startScraperNative({
+          limit: scraperLimit,
+          source: selectedSource || undefined,
+        });
+      } catch (err) {
+        setScraperStatus('error');
+        setScraperOutput(prev => prev + `Error starting scraper: ${err.message}\n`);
+      }
+      return;
+    }
 
     try {
       const res = await fetch(`${backendUrl}/api/scrape/start`, {
@@ -145,6 +160,18 @@ export default function ScraperControl() {
   };
 
   const handleStopScrape = async () => {
+    if (isDesktop) {
+      try {
+        const { stopScraperNative } = await import('../lib/desktop');
+        await stopScraperNative();
+        setScraperStatus('idle');
+        setScraperOutput(prev => prev + '\n--- Process terminated by user ---\n');
+      } catch (err) {
+        console.error('Error stopping native scraper:', err);
+      }
+      return;
+    }
+
     try {
       const res = await fetch(`${backendUrl}/api/scrape/stop`, { method: 'POST' });
       const data = await res.json();
