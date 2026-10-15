@@ -159,8 +159,8 @@ fn load_track_metadata(data_dir: &Path) -> HashMap<String, Vec<String>> {
             Ok(h) => h.clone(),
             Err(_) => continue,
         };
-        let uri_idx = headers.iter().position(|h| h.trim().eq_ignore_ascii_case("track uri"));
-        let genre_idx = headers.iter().position(|h| h.trim().eq_ignore_ascii_case("genres"));
+        let uri_idx = headers.iter().position(|h| h.trim().trim_start_matches('\u{feff}').eq_ignore_ascii_case("track uri"));
+        let genre_idx = headers.iter().position(|h| h.trim().trim_start_matches('\u{feff}').eq_ignore_ascii_case("genres"));
         if let (Some(u_idx), Some(g_idx)) = (uri_idx, genre_idx) {
             for record in rdr.records().flatten() {
                 if let (Some(uri), Some(genres_str)) = (record.get(u_idx), record.get(g_idx)) {
@@ -208,30 +208,35 @@ fn parse_csv_tracks(data_dir: &Path) -> Vec<NormalizedPlay> {
         };
 
         let track_idx = headers.iter().position(|h| {
-            let l = h.trim().to_lowercase();
+            let l = h.trim().trim_start_matches('\u{feff}').to_lowercase();
             l == "track name" || l == "song" || l == "title" || l == "track"
         });
         let artist_idx = headers.iter().position(|h| {
-            let l = h.trim().to_lowercase();
+            let l = h.trim().trim_start_matches('\u{feff}').to_lowercase();
             l == "artist name(s)" || l == "artist name" || l == "artist"
         });
         let album_idx = headers.iter().position(|h| {
-            let l = h.trim().to_lowercase();
+            let l = h.trim().trim_start_matches('\u{feff}').to_lowercase();
             l == "album name" || l == "album"
         });
         let dur_idx = headers.iter().position(|h| {
-            let l = h.trim().to_lowercase();
+            let l = h.trim().trim_start_matches('\u{feff}').to_lowercase();
             l == "duration (ms)" || l == "duration_ms" || l == "duration"
         });
         let uri_idx = headers.iter().position(|h| {
-            let l = h.trim().to_lowercase();
+            let l = h.trim().trim_start_matches('\u{feff}').to_lowercase();
             l == "track uri" || l == "spotify uri" || l == "uri"
         });
 
         if let (Some(t_idx), Some(a_idx)) = (track_idx, artist_idx) {
             for record in rdr.records().flatten() {
                 let track = record.get(t_idx).unwrap_or("").trim().to_string();
-                let artist = record.get(a_idx).unwrap_or("").trim().to_string();
+                let raw_artist = record.get(a_idx).unwrap_or("").trim();
+                let artist = if raw_artist.contains(';') {
+                    raw_artist.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect::<Vec<_>>().join(", ")
+                } else {
+                    raw_artist.to_string()
+                };
                 if track.is_empty() || artist.is_empty() {
                     continue;
                 }

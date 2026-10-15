@@ -27,6 +27,11 @@ const parseProgress = (output) => {
       current = parseInt(progMatch[1], 10);
       total = parseInt(progMatch[2], 10);
     }
+    if (line.includes('🔍 Active Track:')) {
+      currentTrack = line.split('🔍 Active Track:')[1].trim();
+      currentAction = 'Downloading';
+      hasError = false;
+    }
     if (line.includes('🔍 Searching for:')) {
       currentTrack = line.split('🔍 Searching for:')[1].trim();
       currentAction = 'Searching';
@@ -39,12 +44,15 @@ const parseProgress = (output) => {
     }
     if (line.includes('⬇️ Starting download') || line.includes('Downloading at')) {
       currentAction = 'Downloading';
+      hasError = false;
     }
     if (line.includes('✅ Download complete') || line.includes('Download Triggered')) {
       currentAction = 'Completed';
       percent = 100;
     }
-    if (line.includes('✗ Error') || line.includes('✗ Skipped') || line.includes('Failed') || line.includes('❌')) {
+    if (line.includes('[Lookahead Skip]')) {
+      // Ignore lookahead skip so frontend does not flag active downloads as failed
+    } else if (line.includes('✗ Error') || line.includes('✗ Skipped') || line.includes('Failed') || line.includes('❌')) {
       currentAction = 'Skipped';
       hasError = true;
     }

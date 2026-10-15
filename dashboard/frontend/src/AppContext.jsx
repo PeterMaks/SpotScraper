@@ -94,7 +94,7 @@ export const AppProvider = ({ children }) => {
   const pollCounterRef = useRef(0);
   const prevScraperStatusRef = useRef('idle');
 
-  const backendUrl = import.meta.env.DEV ? 'http://localhost:3001' : '';
+  const backendUrl = (typeof window !== 'undefined' && window.__BACKEND_URL__) || ((import.meta.env.DEV || isTauri()) ? 'http://127.0.0.1:3001' : '');
 
   const handleFileUpload = async (event) => {
     if (isTauri() && !event?.target?.files) {
@@ -156,11 +156,14 @@ export const AppProvider = ({ children }) => {
       }
       
       setUploadStatus(`Successfully uploaded ${successCount} file(s).`);
-      fetchStats();
+      await Promise.all([fetchStats(), fetchSources()]);
     } catch (err) {
       console.error(err);
       setUploadStatus(`Upload failed: ${err.message}`);
     } finally {
+      if (event?.target) {
+        try { event.target.value = ''; } catch { /* ignore */ }
+      }
       setUploading(false);
       setTimeout(() => setUploadStatus(''), 5000);
     }

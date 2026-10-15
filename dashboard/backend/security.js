@@ -12,10 +12,12 @@ function createApiGuard({ internalToken } = {}) {
     const hostAllowed = hostName === 'localhost' || hostName === '127.0.0.1' ||
       hostName === '::1' || /^127(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(hostName);
     const origin = req.headers.origin;
+    const isTauriOrigin = origin && (/^tauri:\/\/localhost$/i.test(origin) || /^https?:\/\/tauri\.localhost(:\d+)?$/i.test(origin));
     const originAllowed = !origin ||
-      /^https?:\/\/(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?$/i.test(origin);
+      /^https?:\/\/(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?$/i.test(origin) ||
+      isTauriOrigin;
     const fetchSite = req.headers['sec-fetch-site'];
-    const crossSite = fetchSite && !['same-origin', 'same-site', 'none'].includes(fetchSite);
+    const crossSite = !isTauriOrigin && fetchSite && !['same-origin', 'same-site', 'none'].includes(fetchSite);
     if (!hostAllowed || !originAllowed || crossSite) {
       return res.status(403).json({ error: 'Cross-site or non-local requests are not allowed.' });
     }

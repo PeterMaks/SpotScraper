@@ -103,3 +103,5 @@ PRODUCT.md
 2026-09-17_145939-spotscraper-rust.md
 src-tauri/target/
 dashboard/src-tauri/target/
+dashboard/src-tauri/binaries/
+docs/antigravity_gemini_3_8_orchestration_framework.md

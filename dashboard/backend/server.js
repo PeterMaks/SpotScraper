@@ -56,16 +56,59 @@ function formatDurationMs(ms) {
   return `${m}m ${s}s`;
 }
 
-function parseCSV(content) {
-  const lines = content.split(/\r?\n/).filter(l => l.trim());
-  if (lines.length === 0) return [];
-  const parseLine = l => l.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
-  const headers = parseLine(lines[0]);
-  return lines.slice(1).map(l => {
-    const vals = parseLine(l), row = {};
-    headers.forEach((h, i) => row[h] = vals[i] || '');
+function parseSpotifyCSVContent(rawContent) {
+  const content = (rawContent || '').replace(/^\uFEFF/, '');
+  const rows = [];
+  let inQuotes = false;
+  let currentField = '';
+  let currentRow = [];
+
+  for (let i = 0; i < content.length; i++) {
+    const ch = content[i];
+    if (ch === '"') {
+      if (inQuotes && content[i + 1] === '"') {
+        currentField += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      currentRow.push(currentField.replace(/\s*\r?\n\s*/g, ' ').trim());
+      currentField = '';
+    } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (ch === '\r' && content[i + 1] === '\n') i++;
+      currentRow.push(currentField.replace(/\s*\r?\n\s*/g, ' ').trim());
+      if (currentRow.some(cell => cell.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentField = '';
+    } else {
+      currentField += ch;
+    }
+  }
+
+  if (currentField.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentField.replace(/\s*\r?\n\s*/g, ' ').trim());
+    if (currentRow.some(cell => cell.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+
+  if (rows.length < 2) return [];
+  const headers = rows[0].map(h => h.replace(/^\uFEFF/, '').toLowerCase().trim());
+
+  return rows.slice(1).map(vals => {
+    const row = {};
+    headers.forEach((h, idx) => {
+      if (h) row[h] = vals[idx] ?? '';
+    });
     return row;
   });
+}
+
+function parseCSV(content) {
+  return parseSpotifyCSVContent(content);
 }
 
 let cachedUserMetadata = null;
@@ -207,10 +250,12 @@ const apiLimiter = rateLimit({ windowMs: 60_000, limit: 600, standardHeaders: 'd
 app.use(apiLimiter);
 app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
-// Restrict CORS to localhost/127.0.0.1 dynamically to support varying local ports
+// Restrict CORS to localhost/127.0.0.1 and Tauri webviews
 const allowedOrigins = [
   /^http:\/\/localhost(:\d+)?$/,
-  /^http:\/\/127\.0\.0\.1(:\d+)?$/
+  /^http:\/\/127\.0\.0\.1(:\d+)?$/,
+  /^tauri:\/\/localhost$/,
+  /^https?:\/\/tauri\.localhost(:\d+)?$/
 ];
 
 // Local-only guard: cross-site/non-local origins and rebound hosts are rejected;
@@ -236,7 +281,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' http://localhost:3001;");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' http://localhost:3001 http://127.0.0.1:3001 tauri://localhost http://tauri.localhost https://tauri.localhost;");
   next();
 });
 
@@ -383,7 +428,7 @@ app.get('/api/downloads', async (req, res) => {
       }
       if (!userMeta) {
         // Fallback: check query maps by filename
-        const cleanFilename = normalizeStr(path.basename(filePath, '.mp3'));
+        const cleanFilename = normalizeStr(path.parse(filePath).name);
         userMeta = userMetadataMap.titleToMeta[cleanFilename];
       }
 
@@ -406,7 +451,7 @@ app.get('/api/downloads', async (req, res) => {
       }
 
       // Ensure defaults if still placeholders
-      if (isPlaceholder(title)) title = path.basename(filePath, '.mp3');
+      if (isPlaceholder(title)) title = path.parse(filePath).name;
       if (isPlaceholder(artist)) artist = 'Unknown Artist';
       if (isPlaceholder(album)) album = 'Unknown Album';
       if (isPlaceholder(duration)) duration = '-';
@@ -433,9 +478,22 @@ app.get('/api/downloads', async (req, res) => {
   }
 });
 
+function resolveSafeDownloadPath(relativePath) {
+  if (!relativePath || typeof relativePath !== 'string') return null;
+  const resolvedRoot = path.resolve(downloadsDir);
+  const resolvedTarget = path.resolve(downloadsDir, relativePath);
+  if (resolvedTarget === resolvedRoot || !resolvedTarget.startsWith(resolvedRoot + path.sep)) {
+    return null;
+  }
+  return resolvedTarget;
+}
+
 // Downloads are application-owned. Only selected regular files may be removed.
 app.delete('/api/downloads/file/*', async (req, res, next) => {
   try {
+    if (!resolveSafeDownloadPath(req.params[0])) {
+      return res.status(403).json({ error: 'Forbidden path' });
+    }
     const file = await resolveDownloadFile(downloadsDir, req.params[0]);
     await fs.unlink(file);
     res.json({ success: true, message: `Deleted ${req.params[0]}` });
@@ -452,6 +510,10 @@ app.post('/api/downloads/delete-batch', async (req, res) => {
   const deleted = [], errors = [];
   for (const name of new Set(files)) {
     try {
+      if (!resolveSafeDownloadPath(name)) {
+        errors.push({ file: name, error: 'Forbidden path' });
+        continue;
+      }
       await fs.unlink(await resolveDownloadFile(downloadsDir, name));
       deleted.push(name);
     } catch (err) { errors.push({ file: name, error: err.status ? err.message : 'Deletion failed' }); }
@@ -466,6 +528,9 @@ app.post('/api/downloads/zip', async (req, res, next) => {
     const entries = [];
     let bytes = 0;
     for (const name of new Set(files)) {
+      if (!resolveSafeDownloadPath(name)) {
+        return res.status(403).json({ error: 'Forbidden path' });
+      }
       const file = await resolveDownloadFile(downloadsDir, name);
       bytes += (await fs.stat(file)).size;
       if (bytes > 2 * 1024 ** 3) return res.status(413).json({ error: 'ZIP selection exceeds 2 GiB' });

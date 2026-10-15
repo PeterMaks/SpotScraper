@@ -57,25 +57,30 @@ function mergeStats(a, b) {
       hours: Math.round((item.hours + (dB?.[i]?.hours || 0)) * 10) / 10,
     }));
 
+  const mergedTrend = mergeTrend(a.dailyTrend, b.dailyTrend);
+  const totalHours = Math.round((a.totalHours + b.totalHours) * 10) / 10;
+  const mergedArtists = mergeTop(a.topArtists, b.topArtists);
+  const mergedTracks = mergeTop(a.topTracks, b.topTracks, true);
+
   return {
-    totalHours:        Math.round((a.totalHours + b.totalHours) * 10) / 10,
+    totalHours,
     totalMusicHours:   Math.round((a.totalMusicHours + b.totalMusicHours) * 10) / 10,
     totalPodcastHours: Math.round((a.totalPodcastHours + b.totalPodcastHours) * 10) / 10,
-    uniqueArtists:     a.uniqueArtists + b.uniqueArtists,
-    uniqueTracks:      a.uniqueTracks + b.uniqueTracks,
-    uniquePodcasts:    a.uniquePodcasts + b.uniquePodcasts,
-    totalPlays:        a.totalPlays + b.totalPlays,
-    skippedCount:      a.skippedCount + b.skippedCount,
-    maxStreak:         Math.max(a.maxStreak, b.maxStreak),
-    avgDailyHours:     Math.round(((a.avgDailyHours + b.avgDailyHours) / 2) * 10) / 10,
-    topArtists:        mergeTop(a.topArtists, b.topArtists).slice(0, 20),
-    topTracks:         mergeTop(a.topTracks, b.topTracks, true).slice(0, 20),
+    uniqueArtists:     Math.max(mergedArtists.length, Math.max(a.uniqueArtists || 0, b.uniqueArtists || 0)),
+    uniqueTracks:      Math.max(mergedTracks.length, Math.max(a.uniqueTracks || 0, b.uniqueTracks || 0)),
+    uniquePodcasts:    Math.max((a.uniquePodcasts || 0), (b.uniquePodcasts || 0)),
+    totalPlays:        (a.totalPlays || 0) + (b.totalPlays || 0),
+    skippedCount:      (a.skippedCount || 0) + (b.skippedCount || 0),
+    maxStreak:         Math.max(a.maxStreak || 0, b.maxStreak || 0),
+    avgDailyHours:     mergedTrend.length > 0 ? Math.round((totalHours / mergedTrend.length) * 10) / 10 : 0,
+    topArtists:        mergedArtists.slice(0, 20),
+    topTracks:         mergedTracks.slice(0, 20),
     topPodcasts:       mergeTop(a.topPodcasts, b.topPodcasts).slice(0, 10),
     topAlbums:         mergeTop(a.topAlbums, b.topAlbums).slice(0, 10),
     topGenres:         mergeTop(a.topGenres, b.topGenres).slice(0, 15),
     listeningByDay:    mergeByDay(a.listeningByDay, b.listeningByDay),
     listeningByTime:   mergeByTime(a.listeningByTime, b.listeningByTime),
-    dailyTrend:        mergeTrend(a.dailyTrend, b.dailyTrend),
+    dailyTrend:        mergedTrend,
   };
 }
 
@@ -292,6 +297,14 @@ export default function Dashboard() {
     return mergeStats(stats, appleStats);
   }, [platformView, stats, appleStats]);
 
+  const hasData = Boolean(
+    selectedStats && (
+      selectedStats.totalHours > 0 ||
+      selectedStats.totalPlays > 0 ||
+      (selectedStats.topTracks?.length || 0) > 0
+    )
+  );
+
   const isLoading = platformView === 'spotify' ? loadingStats
     : platformView === 'apple' ? loadingAppleStats
     : loadingStats || loadingAppleStats;
@@ -333,7 +346,7 @@ export default function Dashboard() {
                   <input
                     type="file"
                     multiple
-                    accept=".json,.csv"
+                    accept=".csv,.json"
                     onClick={async (e) => {
                       if (!isDesktop) return;
                       e.preventDefault();
@@ -410,7 +423,7 @@ export default function Dashboard() {
           </div>
           <p className="text-center text-sm text-muted-foreground mt-2">Aggregating {platformLabel} stats&hellip;</p>
         </div>
-      ) : selectedStats ? (
+      ) : hasData ? (
         <div className="flex flex-col gap-8">
 
           {/* Stat Cards — stagger in on mount */}

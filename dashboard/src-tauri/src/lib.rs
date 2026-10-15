@@ -2,6 +2,7 @@ pub mod apple_parser;
 pub mod downloads;
 pub mod importer;
 pub mod scraper;
+pub mod spotify_csv;
 pub mod spotify_parser;
 pub mod state;
 
@@ -483,7 +484,8 @@ pub fn run() {
             get_detailed_logs,
             delete_logs_batch,
             clear_all_logs,
-            reveal_path
+            reveal_path,
+            spotify_csv::import_spotify_csv
         ])
         .run(tauri::generate_context!())
         .expect("error while running SpotScraper Tauri application");

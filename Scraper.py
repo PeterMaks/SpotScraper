@@ -1,4 +1,5 @@
 import json
+import shutil
 import tempfile
 import os
 import re
@@ -82,7 +83,21 @@ def _atomic_write_json(target_path, data_dict):
         print(f"Error saving {target_path}: {e}")
 
 def save_cache(cache_dict):
-    _atomic_write_json(CACHE_FILE, cache_dict)
+    try:
+        os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
+        name = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=os.path.dirname(CACHE_FILE), delete=False) as f:
+                name = f.name
+                json.dump(cache_dict, f, indent=4, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(name, CACHE_FILE)
+        finally:
+            if name and os.path.exists(name):
+                os.unlink(name)
+    except Exception as e:
+        print(f"Error saving {CACHE_FILE}: {e}")
 
 def _update_disk_log(filepath, key, value):
     with _log_file_lock:
@@ -119,7 +134,8 @@ def emit_log(log_type, key, data):
     elif log_type == 'scrapeLog':
         _update_disk_log(SCRAPE_LOG_FILE, key, data)
 
-    url = os.environ.get('SCRAPER_LOG_URL', 'http://localhost:3001/api/internal/log')
+    backend_base = os.environ.get('BACKEND_URL', 'http://localhost:3001').rstrip('/')
+    url = os.environ.get('SCRAPER_LOG_URL') or f"{backend_base}/api/internal/log"
     payload = json.dumps({
         "type": log_type,
         "key": key,
@@ -149,7 +165,8 @@ def emit_log(log_type, key, data):
 def build_dir_cache(downloads_dir="downloads"):
     return {
         "".join(c for c in p.stem if c.isalnum()).lower(): str(p)
-        for p in pathlib.Path(downloads_dir).rglob("*.*") if p.suffix in ['.mp3', '.m4a']
+        for p in pathlib.Path(downloads_dir).rglob("*.*")
+        if p.suffix.lower() in ['.mp3', '.m4a', '.opus', '.webm', '.flac']
     }
 
 def parse_excel_file(filepath):
@@ -297,23 +314,27 @@ def parse_spotify_data(json_directory, specific_file=None):
             if filename.endswith(".csv"):
                 print(f"Parsing custom CSV file: {filename}")
                 try:
-                    with open(filepath, 'r', encoding='utf-8') as f:
-                        # Try to sniff headers
-                        sample = f.read(2048)
+                    with open(filepath, 'r', encoding='utf-8-sig', errors='replace') as f:
+                        # Deterministic header check against known column names
+                        first_line = f.readline().lower()
                         f.seek(0)
-                        has_header = False
-                        try:
-                            has_header = csv.Sniffer().has_header(sample)
-                        except Exception:  # nosec B110 - Sniffer throws if header/delimiter is undetectable; fallback is safe
-                            pass
+                        known_headers = ('track', 'track name', 'track uri', 'song', 'title', 'artist', 'artist name(s)', 'uri', 'id')
+                        has_header = any(h in first_line for h in known_headers)
                         
                         if has_header:
-                            f.seek(0)
                             dict_reader = csv.DictReader(f)
                             dict_reader.fieldnames = [h.strip().lower() for h in dict_reader.fieldnames] if dict_reader.fieldnames else []
                             for row in dict_reader:
                                 track = (row.get('track') or row.get('song') or row.get('title') or row.get('name') or row.get('track name') or row.get('song name') or "").strip()
-                                artist = (row.get('artist') or row.get('singer') or row.get('band') or row.get('artist name') or row.get('artist name(s)') or row.get('artists') or "").strip()
+                                raw_artist = (row.get('artist') or row.get('singer') or row.get('band') or row.get('artist name') or row.get('artist name(s)') or row.get('artists') or "").strip()
+                                
+                                # Normalize semicolon-separated Exportify artists (e.g. "Calvin Harris;Ayah Marar" -> "Calvin Harris, Ayah Marar")
+                                if ';' in raw_artist:
+                                    artist_parts = [a.strip() for a in raw_artist.split(';') if a.strip()]
+                                    artist = ", ".join(artist_parts)
+                                else:
+                                    artist = raw_artist
+
                                 playlist = (row.get('playlist') or row.get('folder') or row.get('category') or row.get('playlist name') or "").strip()
                                 uri = (row.get('uri') or row.get('track uri') or row.get('id') or row.get('spotify uri') or "").strip()
                                 album = (row.get('album') or row.get('album name') or "").strip()
@@ -354,7 +375,11 @@ def parse_spotify_data(json_directory, specific_file=None):
                                     continue
                                 if len(row) >= 2:
                                     track = row[0].strip()
-                                    artist = row[1].strip()
+                                    raw_artist = row[1].strip()
+                                    if ';' in raw_artist:
+                                        artist = ", ".join(a.strip() for a in raw_artist.split(';') if a.strip())
+                                    else:
+                                        artist = raw_artist
                                     playlist = row[2].strip() if len(row) > 2 else ""
                                     query = f"{track} {artist}".strip()
                                     if query not in seen_queries:
@@ -632,19 +657,22 @@ def resolve_item(item_dict, idx, total, downloads_dir, persistent_cache, dir_cac
 
     search_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    ffmpeg_dir = get_bundled_ffmpeg_dir() or r"C:\Users\ADMIN\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
-    if not (ffmpeg_dir and os.path.exists(ffmpeg_dir)):
+    ffmpeg_bin = shutil.which("ffmpeg")
+    ffmpeg_dir = os.path.dirname(ffmpeg_bin) if ffmpeg_bin else None
+    if not ffmpeg_dir:
         try:
             import imageio_ffmpeg
             ffmpeg_dir = os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
         except Exception:
             ffmpeg_dir = None
+    if not ffmpeg_dir:
+        ffmpeg_dir = get_bundled_ffmpeg_dir() or r"C:\Users\ADMIN\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
 
     # ponytail: node js_runtime + web/default player client eliminates YouTube 403 Forbidden errors
     ydl_opts = {
         'ffmpeg_location': ffmpeg_dir if ffmpeg_dir and os.path.exists(ffmpeg_dir) else None,
         'format': 'm4a/bestaudio/best',
-        'outtmpl': os.path.join(track_download_dir, '%(title)s.%(ext)s'),
+        'outtmpl': os.path.join(track_download_dir, '%(artist)s - %(title)s.%(ext)s'),
         'writethumbnail': True,
         'postprocessors': [
             {'key': 'FFmpegMetadata', 'add_metadata': True},
@@ -757,7 +785,7 @@ def resolve_item(item_dict, idx, total, downloads_dir, persistent_cache, dir_cac
                 base.update({"status": "not_found"})
                 return base
 
-            print(f"  ✗ Skipped: Artist mismatch. checked up to 5 results for: {item} (target artist: '{target_artist}')")
+            print(f"  [Lookahead Skip] Artist mismatch. checked up to 5 results for: {item} (target artist: '{target_artist}')")
 
             # --- Fallback: retry with release year ---
             release_date = item_dict.get("release_date", "")
@@ -904,6 +932,7 @@ def download_resolved(resolved, downloads_dir, persistent_cache, dir_cache, cach
     """Consumer-side: download (or record) one resolved item and emit its log."""
     status = resolved["status"]
     item = resolved["item"]
+    print(f"🔍 Active Track: {item}")
     item_dict = resolved["item_dict"]
     playlist_name = resolved["playlist_name"]
     search_time_str = resolved["search_time_str"]
@@ -994,7 +1023,7 @@ def download_resolved(resolved, downloads_dir, persistent_cache, dir_cache, cach
             clean_yt_title = "".join(c for c in title if c.isalnum()).lower()
             with cache_lock:
                 for file in os.listdir(track_download_dir):
-                    if file.endswith(('.mp3', '.m4a')):
+                    if file.lower().endswith(('.mp3', '.m4a', '.opus', '.webm', '.flac')):
                         filepath = os.path.join(track_download_dir, file)
                         filename_no_ext = os.path.splitext(file)[0]
                         clean_filename = "".join(c for c in filename_no_ext if c.isalnum()).lower()
@@ -1100,6 +1129,7 @@ def search_and_scrape(download_list, base_url, is_single_query=False):
             break
         dl_idx += 1
         print(f"\n{'='*70}")
+        print(f"Processing [{dl_idx}/{total_items}]")
         print(f"Downloading [{dl_idx}/{total_items}]")
         print(f"{'='*70}")
         download_resolved(resolved, downloads_dir, persistent_cache, dir_cache, cache_lock, results)

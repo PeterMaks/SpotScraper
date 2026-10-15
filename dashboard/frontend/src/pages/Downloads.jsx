@@ -54,6 +54,7 @@ export default function Downloads() {
       }
     })();
     return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDesktop, downloads]);
 
   const deferredSearch = useDeferredValue(downloadsSearch);
@@ -351,7 +352,7 @@ export default function Downloads() {
                 </TableRow>
               ) : (
                 filteredDownloads.map((file, index) => {
-                  let title = file.title || file.name.replace('.mp3', '');
+                  let title = file.title || file.name.replace(/\.(mp3|m4a|opus|webm|flac)$/i, '');
                   let artist = file.artist || 'Unknown Artist';
                   let album = file.album || '-';
 

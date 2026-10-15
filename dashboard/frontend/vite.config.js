@@ -1,4 +1,5 @@
 import path from "path"
+import process from "node:process"
 import { fileURLToPath } from "url"
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'

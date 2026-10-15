@@ -88,11 +88,13 @@ export default function Layout() {
   const [currentCover, setCurrentCover] = useState(null);
 
   useEffect(() => {
-    if (!isDesktop || !currentTrack) {
-      setCurrentCover(null);
-      return;
-    }
     let active = true;
+    if (!isDesktop || !currentTrack) {
+      Promise.resolve().then(() => {
+        if (active) setCurrentCover(null);
+      });
+      return () => { active = false; };
+    }
     (async () => {
       const target = currentTrack.filePath || currentTrack.url;
       if (target) {
@@ -299,8 +301,8 @@ export default function Layout() {
                   <Icons.Music className="size-6 drop-shadow-md absolute z-0" />
                 </div>
                 <div className="flex flex-col overflow-hidden">
-                  <span className="truncate font-bold text-sm drop-shadow-sm" title={currentTrack.title || currentTrack.name.replace('.mp3', '')}>
-                    {currentTrack.title || currentTrack.name.replace('.mp3', '')}
+                  <span className="truncate font-bold text-sm drop-shadow-sm" title={currentTrack.title || currentTrack.name.replace(/\.(mp3|m4a|opus|webm|flac)$/i, '')}>
+                    {currentTrack.title || currentTrack.name.replace(/\.(mp3|m4a|opus|webm|flac)$/i, '')}
                   </span>
                   <span className="truncate text-xs text-muted-foreground font-medium" title={currentTrack.artist || 'Unknown Artist'}>
                     {currentTrack.artist || 'Unknown Artist'}
