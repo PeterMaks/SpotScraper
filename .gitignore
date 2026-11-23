@@ -61,6 +61,11 @@ dashboard/backend/logs/
 # Agents / IDE / Editor
 # =========================
 .agents/
+.claude/
+.hermes/
+.openclaw/
+.zcode/
+.bob/
 skills-lock.json
 .vscode/
 .idea/
@@ -70,6 +75,7 @@ skills-lock.json
 *.sln
 *.sw?
 .DS_Store
+graphify-out/
 
 # =========================
 # OS-specific
@@ -82,3 +88,20 @@ docs/superpowers/specs/assets/spotify-brand/logo.svg
 docs/superpowers/specs/landing.html
 __pycache__/
 
+.graphify_ast.json
+.graphify_detect.json
+.graphify_python
+.graphify_analysis.json
+.graphify_extract.json
+DESIGN.md
+.github/hooks/impeccable.json
+.impeccable/
+.codex/
+.claudecode/
+.github/skills/
+PRODUCT.md
+2026-09-17_145939-spotscraper-rust.md
+src-tauri/target/
+dashboard/src-tauri/target/
+dashboard/src-tauri/binaries/
+docs/antigravity_gemini_3_8_orchestration_framework.md

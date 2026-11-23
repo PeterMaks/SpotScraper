@@ -1,4 +1,3 @@
-import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 
@@ -47,6 +46,8 @@ export default function DayOfWeekChart({ data = [] }) {
                 radius={[6, 6, 0, 0]}
                 barSize={32}
                 background={{ fill: 'oklch(1 0 0 / 5%)', radius: 6 }}
+                animationDuration={800}
+                animationEasing="ease-out"
               />
             </BarChart>
           </ResponsiveContainer>

@@ -1,5 +1,5 @@
-// @refresh reset
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { isTauri, sendDesktopNotification, openNativeFileDialog, openNativeFolderDialog, revealInExplorer } from './lib/desktop';
 
 const AppContext = createContext();
 
@@ -45,7 +45,39 @@ export const AppProvider = ({ children }) => {
   const [volume, setVolume] = useState(1);
   const audioRef = useRef(null);
   const pendingPlayRef = useRef(false);
-  // timeUpdateRAF removed for direct DOM updates
+
+  // Web Audio Shared Analyser Node
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const sourceNodeRef = useRef(null);
+
+  const getAnalyserNode = useCallback(() => {
+    if (!audioRef.current) return null;
+    if (!audioCtxRef.current) {
+      const AudioCtx = window.AudioContext || (window).webkitAudioContext;
+      if (!AudioCtx) return null;
+      const ctx = new AudioCtx();
+      audioCtxRef.current = ctx;
+
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.78;
+      analyserRef.current = analyser;
+
+      try {
+        const source = ctx.createMediaElementSource(audioRef.current);
+        sourceNodeRef.current = source;
+        source.connect(analyser);
+        analyser.connect(ctx.destination);
+      } catch (e) {
+        console.warn('Could not connect audio to Web Audio analyser:', e);
+      }
+    }
+    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume().catch(() => {});
+    }
+    return analyserRef.current;
+  }, []);
 
   // Search/Filters
   const [dashSearch, setDashSearch] = useState('');
@@ -59,14 +91,44 @@ export const AppProvider = ({ children }) => {
   const [loadingDownloads, setLoadingDownloads] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(true);
 
-  const pollIntervalRef = useRef(null);
   const pollCounterRef = useRef(0);
+  const prevScraperStatusRef = useRef('idle');
 
-  const backendUrl = import.meta.env.DEV ? 'http://localhost:3001' : '';
+  const backendUrl = (typeof window !== 'undefined' && window.__BACKEND_URL__) || ((import.meta.env.DEV || isTauri()) ? 'http://127.0.0.1:3001' : '');
 
   const handleFileUpload = async (event) => {
-    const files = event.target.files;
+    if (isTauri() && !event?.target?.files) {
+      try {
+        setUploading(true);
+        setUploadStatus('Importing files...');
+        const count = await openNativeFileDialog('spotify');
+        if (count > 0) {
+          setUploadStatus(`Successfully imported ${count} file(s).`);
+          fetchStats();
+          fetchSources();
+        } else {
+          setUploadStatus('');
+        }
+      } catch (err) {
+        setUploadStatus(`Import failed: ${err.message}`);
+      } finally {
+        setUploading(false);
+        setTimeout(() => setUploadStatus(''), 5000);
+      }
+      return;
+    }
+
+    const files = event?.target?.files;
     if (!files || files.length === 0) return;
+
+    for (const file of files) {
+      if (!/\.(csv|json)$/i.test(file.name)) {
+        setUploadStatus('Upload CSV or JSON files only.');
+        setTimeout(() => setUploadStatus(''), 5000);
+        return;
+      }
+    }
+
 
     setUploading(true);
     setUploadStatus('Uploading files...');
@@ -75,18 +137,13 @@ export const AppProvider = ({ children }) => {
     
     try {
       for (const file of files) {
-        const base64Data = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(file);
-        });
-        
+        const formData = new FormData();
+        formData.append('file', file);
         const res = await fetch(`${backendUrl}/api/upload`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: file.name, content: base64Data })
+          body: formData
         });
+        // Let the browser include the multipart boundary in Content-Type.
         
         if (!res.ok) {
           const errText = await res.text();
@@ -94,15 +151,19 @@ export const AppProvider = ({ children }) => {
         }
         
         const data = await res.json();
-        if (data.success) successCount++;
+        if (!data.success) throw new Error(data.error || 'Server did not accept the file.');
+        successCount++;
       }
       
       setUploadStatus(`Successfully uploaded ${successCount} file(s).`);
-      fetchStats();
+      await Promise.all([fetchStats(), fetchSources()]);
     } catch (err) {
       console.error(err);
       setUploadStatus(`Upload failed: ${err.message}`);
     } finally {
+      if (event?.target) {
+        try { event.target.value = ''; } catch { /* ignore */ }
+      }
       setUploading(false);
       setTimeout(() => setUploadStatus(''), 5000);
     }
@@ -110,7 +171,8 @@ export const AppProvider = ({ children }) => {
 
   const loadAndPlay = (trackFile) => {
     if (!audioRef.current) return;
-    audioRef.current.src = `${backendUrl}${trackFile.url}`;
+    if (audioRef.current.src?.startsWith('blob:') && audioRef.current.src !== trackFile.url) URL.revokeObjectURL(audioRef.current.src);
+    audioRef.current.src = trackFile.streamUrl || (trackFile.url.startsWith('blob:') ? trackFile.url : `${backendUrl}${trackFile.url}`);
     audioRef.current.load();
     pendingPlayRef.current = true;
   };
@@ -130,7 +192,7 @@ export const AppProvider = ({ children }) => {
   }, [isPlaying, currentTrack]);
 
   const handlePlayTrack = (trackFile) => {
-    if (currentTrack?.name === trackFile.name) {
+    if (currentTrack?.url === trackFile.url && currentTrack?.name === trackFile.name) {
       setIsPlaying(!isPlaying);
     } else {
       loadAndPlay(trackFile);
@@ -141,13 +203,12 @@ export const AppProvider = ({ children }) => {
   };
 
   const getActiveList = () => {
-    const list = downloads.filter(file => file.name.toLowerCase().includes(downloadsSearch.toLowerCase()));
-    return list.length > 0 ? list : downloads;
+    return downloads.filter(file => file.name.toLowerCase().includes(downloadsSearch.toLowerCase()));
   };
 
   const handlePlayNext = () => {
-    if (downloads.length === 0) return;
     const activeList = getActiveList();
+    if (activeList.length === 0) return;
     let nextIndex = 0;
     if (currentTrack) {
       const currentIndex = activeList.findIndex(file => file.name === currentTrack.name);
@@ -161,8 +222,8 @@ export const AppProvider = ({ children }) => {
   };
 
   const handlePlayPrev = () => {
-    if (downloads.length === 0) return;
     const activeList = getActiveList();
+    if (activeList.length === 0) return;
     let prevIndex = activeList.length - 1;
     if (currentTrack) {
       const currentIndex = activeList.findIndex(file => file.name === currentTrack.name);
@@ -174,8 +235,6 @@ export const AppProvider = ({ children }) => {
     setDuration(0);
     setIsPlaying(true);
   };
-
-  // handleTimeUpdate removed for direct DOM updates
 
   const handleLoadedMetadata = () => {
     if (audioRef.current) setDuration(audioRef.current.duration);
@@ -192,134 +251,269 @@ export const AppProvider = ({ children }) => {
     if (audioRef.current) audioRef.current.volume = vol;
   };
 
-  const fetchSources = async () => {
-    try {
-      const res = await fetch(`${backendUrl}/api/sources`);
-      const data = await res.json();
-      setSourceFiles(data.sources || []);
-    } catch (err) {
-      console.error('Error fetching sources:', err);
+  const fetchSources = useCallback(async (signal) => {
+    if (isTauri()) {
+      try {
+        const desktop = await import('./lib/desktop');
+        const sources = await desktop.fetchSourcesNative();
+        setSourceFiles(Array.isArray(sources) ? sources : (sources?.sources || []));
+      } catch (err) {
+        console.error('Error fetching native sources:', err);
+      }
+      return;
     }
-  };
-
-  const fetchAppleStats = async () => {
-    setLoadingAppleStats(true);
     try {
-      const res = await fetch(`${backendUrl}/api/apple/stats`);
+      const res = await fetch(`${backendUrl}/api/sources`, { signal });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setAppleStats(data);
+      setSourceFiles(data.sources || []); // keep previous sources visible while a refresh is in flight
     } catch (err) {
-      console.error('Error fetching Apple stats:', err);
+      if (err.name !== 'AbortError') console.error('Error fetching sources:', err);
+    }
+  }, [backendUrl]);
+
+  const fetchAppleStats = useCallback(async (signal) => {
+    if (isTauri()) {
+      try {
+        const desktop = await import('./lib/desktop');
+        const data = await desktop.fetchAppleStatsNative(true);
+        setAppleStats(data);
+      } catch (err) {
+        console.error('Error fetching native Apple stats:', err);
+      } finally {
+        setLoadingAppleStats(false);
+      }
+      return;
+    }
+    try {
+      const res = await fetch(`${backendUrl}/api/apple/stats`, { signal });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+      const data = await res.json();
+      setAppleStats(data); // keep previous stats visible while a refresh is in flight
+    } catch (err) {
+      if (err.name !== 'AbortError') console.error('Error fetching Apple stats:', err);
     } finally {
       setLoadingAppleStats(false);
     }
-  };
+  }, [backendUrl]);
 
-  const fetchStats = async () => {
-    setLoadingStats(true);
+  const fetchStats = useCallback(async (signal) => {
+    if (isTauri()) {
+      try {
+        const desktop = await import('./lib/desktop');
+        const data = await desktop.fetchSpotifyStatsNative(true);
+        setStats(data);
+      } catch (err) {
+        console.error('Error fetching native stats:', err);
+      } finally {
+        setLoadingStats(false);
+      }
+      return;
+    }
     try {
-      const res = await fetch(`${backendUrl}/api/stats`);
+      const res = await fetch(`${backendUrl}/api/stats`, { signal });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setStats(data);
+      setStats(data); // keep previous stats visible while a refresh is in flight
     } catch (err) {
-      console.error('Error fetching stats:', err);
+      if (err.name !== 'AbortError') console.error('Error fetching stats:', err);
     } finally {
       setLoadingStats(false);
     }
-  };
+  }, [backendUrl]);
 
-  const fetchDownloads = async () => {
-    setLoadingDownloads(true);
+  const fetchDownloads = useCallback(async (signal) => {
+    if (isTauri()) {
+      try {
+        const desktop = await import('./lib/desktop');
+        const files = await desktop.fetchDownloadsNative();
+        setDownloads(files || []);
+      } catch (err) {
+        console.error('Error fetching native downloads:', err);
+      } finally {
+        setLoadingDownloads(false);
+      }
+      return;
+    }
     try {
-      const res = await fetch(`${backendUrl}/api/downloads?_t=${Date.now()}`);
+      const res = await fetch(`${backendUrl}/api/downloads?_t=${Date.now()}`, { signal });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setDownloads(data.files || []);
+      setDownloads(data.files || []); // keep previous list visible while a refresh is in flight
     } catch (err) {
-      console.error('Error fetching downloads:', err);
+      if (err.name !== 'AbortError') console.error('Error fetching downloads:', err);
     } finally {
       setLoadingDownloads(false);
     }
-  };
+  }, [backendUrl]);
 
-  const fetchLogs = async () => {
+  // ponytail: memoized fetchLogs avoids recreating function identity on every render
+  const fetchLogs = useCallback(async (signal) => {
+    if (isTauri()) {
+      try {
+        const desktop = await import('./lib/desktop');
+        const data = await desktop.fetchDetailedLogsNative();
+        setLogs(data || { downloadLinks: {}, scrapeLog: {} });
+      } catch (err) {
+        console.error('Error fetching native logs:', err);
+      } finally {
+        setLoadingLogs(false);
+      }
+      return;
+    }
     try {
-      setLoadingLogs(true);
       const res = await fetch(`${backendUrl}/api/logs?_t=${Date.now()}`, {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache'
-        }
+        },
+        signal
       });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setLogs(data);
+      setLogs(data); // keep previous logs visible while a refresh is in flight
     } catch (err) {
-      console.error('Error fetching logs:', err);
+      if (err.name !== 'AbortError') console.error('Error fetching logs:', err);
     } finally {
       setLoadingLogs(false);
     }
-  };
+  }, [backendUrl]);
 
-  const checkScraperStatus = async () => {
+  const checkScraperStatus = useCallback(async (signal) => {
+    if (isTauri()) return;
     try {
-      const res = await fetch(`${backendUrl}/api/scrape/status`);
+      const res = await fetch(`${backendUrl}/api/scrape/status`, { signal });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setScraperStatus(data.status);
+      setScraperStatus(data.status); // keep previous status visible while a refresh is in flight
       setScraperType(data.type);
       setScraperOutput(data.output);
     } catch (err) {
-      console.error('Error checking scraper status:', err);
+      if (err.name !== 'AbortError') console.error('Error checking scraper status:', err);
     }
-  };
+  }, [backendUrl]);
 
-  const pollScraperStatus = async () => {
+  const pollScraperStatus = useCallback(async (signal) => {
     try {
-      const res = await fetch(`${backendUrl}/api/scrape/status`);
+      const res = await fetch(`${backendUrl}/api/scrape/status`, { signal });
+      if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setScraperStatus(data.status);
+      if (signal.aborted) return;
       setScraperOutput(data.output);
-      
       pollCounterRef.current += 1;
-      
+
       if (data.status === 'success' || data.status === 'error') {
-        fetchStats();
-        fetchDownloads();
-        fetchLogs();
-      } else if (data.status === 'running') {
-        if (pollCounterRef.current % 2 === 0) {
-          fetchDownloads();
-          fetchLogs();
+        if (prevScraperStatusRef.current === 'running') {
+          if (data.status === 'success') {
+            sendDesktopNotification('SpotScraper', 'Media scrape and download completed successfully!');
+          } else {
+            sendDesktopNotification('SpotScraper', 'Download process completed with errors.');
+          }
         }
+        await Promise.all([fetchStats(signal), fetchDownloads(signal), fetchLogs(signal)]);
+      } else if (data.status === 'running' && pollCounterRef.current % 2 === 0) {
+        await Promise.all([fetchDownloads(signal), fetchLogs(signal)]);
       }
+      prevScraperStatusRef.current = data.status;
+      // Publish terminal status after the final refresh so effect cleanup cannot abort it.
+      if (!signal.aborted) setScraperStatus(data.status);
+      return data.status;
     } catch (err) {
-      console.error('Error polling status:', err);
+      if (err.name !== 'AbortError') console.error('Error polling status:', err);
     }
-  };
+  }, [backendUrl, fetchStats, fetchDownloads, fetchLogs]);
 
   useEffect(() => {
+    // Each loader sets state only after its network request settles.
     fetchStats();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAppleStats();
     fetchDownloads();
     fetchLogs();
     fetchSources();
     checkScraperStatus();
 
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
-  }, []);
+  }, [fetchStats, fetchAppleStats, fetchDownloads, fetchLogs, fetchSources, checkScraperStatus]);
 
   useEffect(() => {
-    if (scraperStatus === 'running') {
-      if (!pollIntervalRef.current) {
-        pollIntervalRef.current = setInterval(pollScraperStatus, 1500);
+    if (!isTauri()) return;
+    let unsub = null;
+    (async () => {
+      try {
+        const desktop = await import('./lib/desktop');
+        unsub = await desktop.subscribeScraperEvents({
+          onLog: (line) => {
+            setScraperOutput((prev) => (prev ? `${prev}\n${line}` : line));
+          },
+          onStatus: (status) => {
+            if (status?.is_running !== undefined) {
+              setScraperStatus(status.is_running ? 'running' : 'idle');
+            }
+          },
+          onComplete: (payload) => {
+            setScraperStatus(payload?.exit_code === 0 ? 'success' : 'error');
+            if (payload?.exit_code === 0) {
+              sendDesktopNotification('SpotScraper', 'Media scrape completed successfully!');
+            } else {
+              sendDesktopNotification('SpotScraper', payload?.message || 'Download process finished with errors.');
+            }
+            fetchDownloads();
+            fetchLogs();
+            fetchStats();
+          },
+        });
+      } catch (err) {
+        console.error('Error subscribing to scraper events:', err);
       }
-    } else {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
+    })();
+    return () => {
+      if (unsub && typeof unsub === 'function') unsub();
+    };
+  }, [fetchDownloads, fetchLogs, fetchStats]);
+
+  useEffect(() => {
+    if (isTauri() || scraperStatus !== 'running') return;
+    let stopped = false;
+    let timer = null;
+    let controller = null;
+    pollCounterRef.current = 0;
+
+    const schedule = (delay = 1500) => {
+      if (!stopped && !document.hidden && !controller && timer === null) {
+        timer = setTimeout(tick, delay);
       }
-    }
-  }, [scraperStatus]);
+    };
+    const tick = async () => {
+      timer = null;
+      if (stopped || document.hidden || controller) return;
+      const request = new AbortController();
+      controller = request;
+      try {
+        const status = await pollScraperStatus(request.signal);
+        if (!request.signal.aborted && status && status !== 'running') stopped = true;
+      } finally {
+        controller = null;
+        schedule(); // wait for status AND its dependent refreshes before the next tick
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        clearTimeout(timer);
+        timer = null;
+        controller?.abort();
+      } else {
+        schedule(0); // an aborted in-flight request must settle before scheduling
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    schedule();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      controller?.abort();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [scraperStatus, pollScraperStatus]);
 
   const value = {
     stats, setStats, loadingStats, fetchStats,
@@ -348,9 +542,15 @@ export const AppProvider = ({ children }) => {
     duration, setDuration,
     volume, setVolume,
     audioRef, pendingPlayRef,
+    getAnalyserNode,
     handlePlayTrack, handlePlayNext, handlePlayPrev,
     handleLoadedMetadata, handleSeek, handleVolumeChange,
-    backendUrl
+    backendUrl,
+    isDesktop: isTauri(),
+    openNativeFileDialog,
+    openNativeFolderDialog,
+    revealInExplorer,
+    sendDesktopNotification
   };
 
   return (

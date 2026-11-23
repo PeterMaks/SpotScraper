@@ -1,0 +1,96 @@
+name: Release SpotScraper Desktop
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag name (e.g. v1.0.0)"
+        required: false
+        default: "v1.0.0"
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    name: Build & Sign SpotScraper (Windows x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: |
+            dashboard/package-lock.json
+            dashboard/frontend/package-lock.json
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install FFmpeg & FFprobe (Bundled into Sidecar)
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: release
+
+      - name: Setup Rust Stable Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust Cargo Target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "dashboard/src-tauri -> target"
+
+      - name: Install Dashboard & Frontend Dependencies
+        shell: pwsh
+        run: |
+          npm --prefix dashboard ci
+          npm --prefix dashboard/frontend ci
+
+      - name: Compile & Verify PyInstaller Sidecar (spotscraper-engine)
+        shell: pwsh
+        run: |
+          npm --prefix dashboard run build:sidecar
+          $sidecar = Get-ChildItem "dashboard/src-tauri/binaries/spotscraper-engine-*.exe" | Select-Object -First 1
+          if (-not $sidecar) {
+            Write-Error "PyInstaller sidecar binary was not found in dashboard/src-tauri/binaries/"
+            exit 1
+          }
+          Write-Host "Verified Sidecar Binary: $($sidecar.FullName)"
+          & $sidecar.FullName --version-check
+
+      - name: Build Frontend Bundle
+        shell: pwsh
+        run: |
+          npm --prefix dashboard run build:frontend
+
+      - name: Build Signed Tauri v2 App & Publish GitHub Release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: dashboard
+          tagName: ${{ github.ref_name || inputs.tag_name || 'v__VERSION__' }}
+          releaseName: "SpotScraper v__VERSION__"
+          releaseBody: |
+            ## SpotScraper v__VERSION__ Native Desktop Release
+            ### Included in this build
+            - **Standalone Native Desktop App** (Tauri v2 + Rust IPC backend)
+            - **Self-Contained Scraper Sidecar** (`Scraper.py` + `yt-dlp` + `ffmpeg` pre-compiled)
+            - **Automatic Over-The-Air Updates** (`latest.json` signed manifest)
+          releaseDraft: false
+          prerelease: false

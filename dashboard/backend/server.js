@@ -1,29 +1,36 @@
 const express = require('express');
 const cors = require('cors');
+const { resolveDownloadFile } = require('./download-path');
+
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 fs.pathExists = async (p) => { try { await fs.access(p); return true; } catch { return false; } };
 fs.readJson = async (p) => JSON.parse(await fs.readFile(p, 'utf8'));
-fs.writeJson = async (p, d, o) => fs.writeFile(p, JSON.stringify(d, null, o?.spaces||0), 'utf8');
+fs.writeJson = require('./state-store').writeJson;
 fs.ensureDir = async (p) => fs.mkdir(p, { recursive: true });
 fs.remove = async (p) => fs.rm(p, { recursive: true, force: true });
 const { spawn } = require('child_process');
 const { aggregateStats } = require('./parser');
 const { aggregateAppleStats } = require('./apple_parser');
-const logger = require('./logger');
-const archiver = require('archiver');
+const { createAsyncCache } = require('./stats-cache');
+const spotifyStatsCache = createAsyncCache(aggregateStats, { ttlMs: 60_000 });
+const appleStatsCache = createAsyncCache(aggregateAppleStats, { ttlMs: 60_000 });
 
+const { ZipArchive } = require('archiver');
+const metadataModule = import('music-metadata');
 // --- Global Log State ---
 const rootDir = path.join(__dirname, '../..');
-const downloadLinksPath = path.join(rootDir, 'download_links.json');
-const scrapeLogPath = path.join(rootDir, 'scrape_log.json');
+const stateDir = path.resolve(process.env.DATA_DIR || rootDir);
+const downloadLinksPath = path.join(stateDir, 'download_links.json');
+const scrapeLogPath = path.join(stateDir, 'scrape_log.json');
 
 let inMemoryDownloadLinks = {};
 let inMemoryScrapeLog = {};
 
-(async () => {
+const ready = (async () => {
   try {
+    await fs.ensureDir(stateDir);
     if (await fs.pathExists(downloadLinksPath)) {
       inMemoryDownloadLinks = await fs.readJson(downloadLinksPath);
     }
@@ -31,7 +38,7 @@ let inMemoryScrapeLog = {};
       inMemoryScrapeLog = await fs.readJson(scrapeLogPath);
     }
   } catch (err) {
-    logger.error('Failed to initialize logs from disk', { error: err.message });
+    console.error('Failed to initialize logs from disk', { error: err.message });
   }
 })();
 
@@ -49,36 +56,79 @@ function formatDurationMs(ms) {
   return `${m}m ${s}s`;
 }
 
-function parseCSV(content) {
-  const lines = content.split(/\r?\n/).filter(l => l.trim());
-  if (lines.length === 0) return [];
-  const parseLine = l => l.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
-  const headers = parseLine(lines[0]);
-  return lines.slice(1).map(l => {
-    const vals = parseLine(l), row = {};
-    headers.forEach((h, i) => row[h] = vals[i] || '');
+function parseSpotifyCSVContent(rawContent) {
+  const content = (rawContent || '').replace(/^\uFEFF/, '');
+  const rows = [];
+  let inQuotes = false;
+  let currentField = '';
+  let currentRow = [];
+
+  for (let i = 0; i < content.length; i++) {
+    const ch = content[i];
+    if (ch === '"') {
+      if (inQuotes && content[i + 1] === '"') {
+        currentField += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      currentRow.push(currentField.replace(/\s*\r?\n\s*/g, ' ').trim());
+      currentField = '';
+    } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (ch === '\r' && content[i + 1] === '\n') i++;
+      currentRow.push(currentField.replace(/\s*\r?\n\s*/g, ' ').trim());
+      if (currentRow.some(cell => cell.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentField = '';
+    } else {
+      currentField += ch;
+    }
+  }
+
+  if (currentField.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentField.replace(/\s*\r?\n\s*/g, ' ').trim());
+    if (currentRow.some(cell => cell.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+
+  if (rows.length < 2) return [];
+  const headers = rows[0].map(h => h.replace(/^\uFEFF/, '').toLowerCase().trim());
+
+  return rows.slice(1).map(vals => {
+    const row = {};
+    headers.forEach((h, idx) => {
+      if (h) row[h] = vals[idx] ?? '';
+    });
     return row;
   });
+}
+
+function parseCSV(content) {
+  return parseSpotifyCSVContent(content);
 }
 
 let cachedUserMetadata = null;
 
 async function loadUserMetadataMap() {
-  const dataDir = path.join(__dirname, '../../spotify_data');
+  const dataDir = (process.env.SPOTIFY_DATA_DIR || path.join(rootDir, 'spotify_data'));
   const queryToMeta = {};
   const titleToMeta = {};
-  
+
   if (!(await fs.pathExists(dataDir))) {
     return { queryToMeta, titleToMeta };
   }
-  
+
   try {
     const files = await fs.readdir(dataDir);
-    
+
     for (const file of files) {
       const filePath = path.join(dataDir, file);
       const ext = path.extname(file).toLowerCase();
-      
+
       if (ext === '.json' && !file.toLowerCase().includes('playlist')) {
         try {
           const data = await fs.readJson(filePath);
@@ -88,15 +138,15 @@ async function loadUserMetadataMap() {
               const artist = entry.master_metadata_album_artist_name;
               const album = entry.master_metadata_album_album_name;
               const ms = entry.ms_played || 0;
-              
+
               if (track && artist) {
                 const query = `${track} ${artist}`;
                 const normQuery = normalizeStr(query);
                 const normTitle = normalizeStr(track);
-                
+
                 const currentDurationMs = (queryToMeta[normQuery] && queryToMeta[normQuery].durationMs) || 0;
                 const durationMs = Math.max(currentDurationMs, ms);
-                
+
                 const meta = {
                   title: track,
                   artist: artist,
@@ -104,7 +154,7 @@ async function loadUserMetadataMap() {
                   duration: durationMs > 0 ? formatDurationMs(durationMs) : '-',
                   durationMs: durationMs
                 };
-                
+
                 queryToMeta[normQuery] = meta;
                 if (!titleToMeta[normTitle] || titleToMeta[normTitle].durationMs < durationMs) {
                   titleToMeta[normTitle] = meta;
@@ -113,20 +163,20 @@ async function loadUserMetadataMap() {
             }
           }
         } catch (err) {
-          logger.warn(`Failed to parse user JSON file: ${file}`, { error: err.message });
+          console.warn(`Failed to parse user JSON file: ${file}`, { error: err.message });
         }
       } else if (ext === '.csv') {
         try {
           const content = await fs.readFile(filePath, 'utf-8');
           const rows = parseCSV(content);
-          
+
           for (const row of rows) {
             let track = '';
             let artist = '';
             let album = '';
             let durationMs = 0;
             let releaseDate = '';
-            
+
             Object.entries(row).forEach(([key, val]) => {
               const k = key.toLowerCase().trim();
               if (['track', 'song', 'title', 'name', 'track name', 'song name'].includes(k)) {
@@ -141,12 +191,12 @@ async function loadUserMetadataMap() {
                 releaseDate = val;
               }
             });
-            
+
             if (track) {
               const query = `${track} ${artist}`.trim();
               const normQuery = normalizeStr(query);
               const normTitle = normalizeStr(track);
-              
+
               const meta = {
                 title: track,
                 artist: artist || 'Unknown Artist',
@@ -155,20 +205,20 @@ async function loadUserMetadataMap() {
                 durationMs: durationMs,
                 releaseDate: releaseDate || ''
               };
-              
+
               queryToMeta[normQuery] = meta;
               titleToMeta[normTitle] = meta;
             }
           }
         } catch (err) {
-          logger.warn(`Failed to parse user CSV file: ${file}`, { error: err.message });
+          console.warn(`Failed to parse user CSV file: ${file}`, { error: err.message });
         }
       }
     }
   } catch (err) {
-    logger.error('Error loading user metadata maps', { error: err.message });
+    console.error('Error loading user metadata maps', { error: err.message });
   }
-  
+
   return { queryToMeta, titleToMeta };
 }
 
@@ -185,17 +235,32 @@ function isPlaceholder(val) {
   return lower === '' || lower === '-' || lower === 'local cache' || lower === 'already downloaded' || lower === 'unknown (local cache)' || lower === 'unknown artist' || lower === 'youtube video';
 }
 
+const { randomBytes } = require('node:crypto');
+const internalToken = process.env.SCRAPER_INTERNAL_TOKEN || randomBytes(32).toString('hex');
+const { createApiGuard } = require('./security');
+const { rateLimit } = require('express-rate-limit');
+
 const app = express();
 const port = 3001;
 
 // Disable Express fingerprinting banner
 app.disable('x-powered-by');
+app.set('trust proxy', false);
+const apiLimiter = rateLimit({ windowMs: 60_000, limit: 600, standardHeaders: 'draft-8', legacyHeaders: false });
+app.use(apiLimiter);
+app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
-// Restrict CORS to localhost/127.0.0.1 dynamically to support varying local ports
+// Restrict CORS to localhost/127.0.0.1 and Tauri webviews
 const allowedOrigins = [
   /^http:\/\/localhost(:\d+)?$/,
-  /^http:\/\/127\.0\.0\.1(:\d+)?$/
+  /^http:\/\/127\.0\.0\.1(:\d+)?$/,
+  /^tauri:\/\/localhost$/,
+  /^https?:\/\/tauri\.localhost(:\d+)?$/
 ];
+
+// Local-only guard: cross-site/non-local origins and rebound hosts are rejected;
+// /api/internal/* additionally requires the scraper's bearer token.
+app.use(createApiGuard({ internalToken }));
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -208,7 +273,7 @@ app.use(cors({
     }
   },
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Sec-Fetch-Site'],
 }));
 
 // Set HTTP Security Headers manual middleware
@@ -216,18 +281,45 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' http://localhost:3001;");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' http://localhost:3001 http://127.0.0.1:3001 tauri://localhost http://tauri.localhost https://tauri.localhost;");
   next();
 });
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.get('/healthz', (req, res) => res.json({ status: 'ok' }));
+app.use(express.json({ limit: '1mb' }));
 
 // Serving the downloads directory statically for direct access
-const downloadsDir = path.join(__dirname, '../../downloads');
+const downloadsDir = path.resolve(process.env.DOWNLOADS_DIR || path.join(rootDir, 'downloads'));
 const appleMusicDataDir = path.join(__dirname, '../../apple_music_data/csvs');
-app.use('/api/downloads/file', express.static(downloadsDir));
+app.get('/api/downloads/file/*', async (req, res, next) => {
+  try {
+    const file = await resolveDownloadFile(downloadsDir, req.params[0]);
+    res.sendFile(file, err => { if (err) next(err); });
+  } catch (err) { next(err); }
+});
 
+// Serve extracted album art directly from ID3 tags
+app.get('/api/downloads/art/*', async (req, res) => {
+  try {
+    const filePath = await resolveDownloadFile(downloadsDir, req.params[0]);
+
+    const metadata = await (await metadataModule).parseFile(filePath, { duration: false });
+    const picture = metadata.common.picture && metadata.common.picture[0];
+
+    if (picture) {
+      res.setHeader('Content-Type', picture.format);
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+      // music-metadata returns Uint8Array; Express 4 serializes it as JSON
+      // unless explicitly converted to a binary Buffer.
+      res.send(Buffer.from(picture.data));
+    } else {
+      res.status(404).json({ error: 'No album art found' });
+    }
+  } catch (err) {
+    // ponytail: quietly return 404 on corrupted ID3 tags so the frontend image falls back gracefully without spamming the backend logs
+    res.status(err.status || 404).json({ error: 'Album art missing or unavailable' });
+  }
+});
 // Background process state
 let currentProcess = null;
 let processLog = '';
@@ -237,10 +329,10 @@ let processType = ''; // 'api' or 'selenium'
 // Get Apple Music stats
 app.get('/api/apple/stats', async (req, res) => {
   try {
-    const stats = await aggregateAppleStats();
+    const stats = await appleStatsCache.get();
     res.json(stats);
   } catch (err) {
-    logger.error('Failed to aggregate Apple stats', { error: err.message, ip: req.ip });
+    console.error('Failed to aggregate Apple stats', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to aggregate Apple stats' });
   }
 });
@@ -248,7 +340,7 @@ app.get('/api/apple/stats', async (req, res) => {
 // List Apple Music source files
 app.get('/api/apple/sources', async (req, res) => {
   try {
-    const baseDir = path.join(__dirname, '../../apple_music_data');
+    const baseDir = (process.env.APPLE_DATA_DIR || path.join(rootDir, 'apple_music_data'));
     const sources = [];
     for (const sub of ['csvs', 'jsons']) {
       const dir = path.join(baseDir, sub);
@@ -260,45 +352,18 @@ app.get('/api/apple/sources', async (req, res) => {
     }
     res.json({ sources });
   } catch (err) {
-    logger.error('Failed to read Apple sources', { error: err.message, ip: req.ip });
+    console.error('Failed to read Apple sources', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to read Apple sources' });
-  }
-});
-
-// Upload Apple Music data file
-app.post('/api/apple/upload', async (req, res) => {
-  try {
-    const { fileName, content } = req.body;
-    if (!fileName || !content) return res.status(400).json({ error: 'Missing fileName or content.' });
-    const safeName = path.basename(fileName);
-    const ext = path.extname(safeName).toLowerCase();
-    // ponytail: route by extension — csvs/ for play history, jsons/ for library metadata (genres)
-    const subDir = ext === '.json' ? 'jsons' : ext === '.csv' ? 'csvs' : null;
-    if (!subDir) {
-      return res.status(400).json({ error: 'Unsupported file type. Only .csv and .json files are accepted.' });
-    }
-    const targetDir = path.join(__dirname, '../../apple_music_data', subDir);
-    await fs.ensureDir(targetDir);
-    const fileBuffer = Buffer.from(content, 'base64');
-    if (fileBuffer.length > 50 * 1024 * 1024) {
-      return res.status(400).json({ error: 'File size exceeds the 50MB limit.' });
-    }
-    await fs.writeFile(path.join(targetDir, safeName), fileBuffer);
-    logger.info('Apple Music file uploaded', { ip: req.ip, file: safeName, subDir });
-    res.json({ success: true, message: `Successfully uploaded ${safeName} to ${subDir}/` });
-  } catch (err) {
-    logger.error('Failed to upload Apple Music file', { error: err.message, ip: req.ip });
-    res.status(500).json({ error: 'Failed to upload Apple Music file.' });
   }
 });
 
 // Get Spotify recap stats
 app.get('/api/stats', async (req, res) => {
   try {
-    const stats = await aggregateStats();
+    const stats = await spotifyStatsCache.get();
     res.json(stats);
   } catch (err) {
-    logger.error('Failed to aggregate stats', { error: err.message, ip: req.ip });
+    console.error('Failed to aggregate stats', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to aggregate stats' });
   }
 });
@@ -311,15 +376,15 @@ app.get('/api/downloads', async (req, res) => {
     await fs.ensureDir(downloadsDir);
     const ents = await fs.readdir(downloadsDir, { recursive: true, withFileTypes: true });
     const filePaths = ents.filter(e => e.isFile()).map(e => path.join(e.parentPath || e.path, e.name));
-    
+
     // Load metadata from root cache files
     const rootDir = path.join(__dirname, '../..');
     let cacheMap = {};
     let metaMap = {};
     try {
-      const cacheData = await fs.readJson(path.join(rootDir, 'download_cache.json')).catch(() => ({}));
-      const metaData = await fs.readJson(path.join(rootDir, 'download_links.json')).catch(() => ({}));
-      
+      const cacheData = await fs.readJson(path.join(stateDir, 'download_cache.json')).catch(() => ({}));
+      const metaData = await fs.readJson(path.join(stateDir, 'download_links.json')).catch(() => ({}));
+
       // cacheData maps query string to { file_path: "C:\\...\\downloads\\Song.mp3" }
       for (const [query, val] of Object.entries(cacheData)) {
         if (val && val.file_path) {
@@ -329,7 +394,7 @@ app.get('/api/downloads', async (req, res) => {
       }
       metaMap = metaData;
     } catch (e) {
-      logger.warn('Error reading metadata cache', { error: e.message });
+      console.warn('Error reading metadata cache', { error: e.message });
     }
 
     const userMetadataMap = await getUserMetadata();
@@ -339,7 +404,7 @@ app.get('/api/downloads', async (req, res) => {
       const relativePath = path.relative(downloadsDir, filePath).replace(/\\/g, '/');
       const basename = path.basename(filePath);
       const stat = await fs.stat(filePath);
-      
+
       let metadata = {};
       const query = cacheMap[basename];
       if (query && metaMap[query]) {
@@ -350,12 +415,12 @@ app.get('/api/downloads', async (req, res) => {
           duration: metaMap[query].duration
         };
       }
-      
+
       let title = metadata.title;
       let artist = metadata.artist;
       let album = metadata.album;
       let duration = metadata.duration;
-      
+
       // Dynamic fallback search in user provided metadata
       let userMeta = null;
       if (query) {
@@ -363,17 +428,17 @@ app.get('/api/downloads', async (req, res) => {
       }
       if (!userMeta) {
         // Fallback: check query maps by filename
-        const cleanFilename = normalizeStr(path.basename(filePath, '.mp3'));
+        const cleanFilename = normalizeStr(path.parse(filePath).name);
         userMeta = userMetadataMap.titleToMeta[cleanFilename];
       }
-      
+
       if (userMeta) {
         if (isPlaceholder(title)) title = userMeta.title;
         if (isPlaceholder(artist)) artist = userMeta.artist;
         if (isPlaceholder(album)) album = userMeta.album;
         if (isPlaceholder(duration)) duration = userMeta.duration;
       }
-      
+
       // Basic formatting splits as a final fallback if still placeholder and query is present
       if (isPlaceholder(title) && query) {
         const parts = query.split(' - ');
@@ -384,9 +449,9 @@ app.get('/api/downloads', async (req, res) => {
           title = query;
         }
       }
-      
+
       // Ensure defaults if still placeholders
-      if (isPlaceholder(title)) title = path.basename(filePath, '.mp3');
+      if (isPlaceholder(title)) title = path.parse(filePath).name;
       if (isPlaceholder(artist)) artist = 'Unknown Artist';
       if (isPlaceholder(album)) album = 'Unknown Album';
       if (isPlaceholder(duration)) duration = '-';
@@ -408,115 +473,77 @@ app.get('/api/downloads', async (req, res) => {
     list.sort((a, b) => b.mtime - a.mtime);
     res.json({ files: list });
   } catch (err) {
-    logger.error('Failed to read downloads directory', { error: err.message, ip: req.ip });
+    console.error('Failed to read downloads directory', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to read downloads directory' });
   }
 });
 
-// Delete a download file (handles subfolders via wildcard match)
-app.delete('/api/downloads/file/*', async (req, res) => {
-  try {
-    const relativePath = req.params[0];
-    const filePath = path.join(downloadsDir, relativePath);
-
-    // Resolve paths to absolute paths to prevent directory traversal
-    const resolvedPath = path.resolve(filePath);
-    const resolvedDownloadsDir = path.resolve(downloadsDir);
-
-    if (!resolvedPath.startsWith(resolvedDownloadsDir)) {
-      logger.warn('Directory traversal attempt detected', { ip: req.ip, path: relativePath });
-      return res.status(403).json({ error: 'Access denied: Directory traversal detected.' });
-    }
-
-    if (await fs.pathExists(resolvedPath)) {
-      await fs.remove(resolvedPath);
-      logger.info('File deleted', { ip: req.ip, file: relativePath });
-      res.json({ success: true, message: `Deleted ${relativePath}` });
-    } else {
-      res.status(404).json({ error: 'File not found' });
-    }
-  } catch (err) {
-    logger.error('Failed to delete file', { error: err.message, ip: req.ip, file: req.params[0] });
-    res.status(500).json({ error: 'Failed to delete file' });
+function resolveSafeDownloadPath(relativePath) {
+  if (!relativePath || typeof relativePath !== 'string') return null;
+  const resolvedRoot = path.resolve(downloadsDir);
+  const resolvedTarget = path.resolve(downloadsDir, relativePath);
+  if (resolvedTarget === resolvedRoot || !resolvedTarget.startsWith(resolvedRoot + path.sep)) {
+    return null;
   }
+  return resolvedTarget;
+}
+
+// Downloads are application-owned. Only selected regular files may be removed.
+app.delete('/api/downloads/file/*', async (req, res, next) => {
+  try {
+    if (!resolveSafeDownloadPath(req.params[0])) {
+      return res.status(403).json({ error: 'Forbidden path' });
+    }
+    const file = await resolveDownloadFile(downloadsDir, req.params[0]);
+    await fs.unlink(file);
+    res.json({ success: true, message: `Deleted ${req.params[0]}` });
+  } catch (err) { next(err); }
 });
 
-// Batch delete
+function validFiles(files) {
+  return Array.isArray(files) && files.length > 0 && files.length <= 500 &&
+    files.every(f => typeof f === 'string' && f.length > 0 && f.length <= 1024);
+}
 app.post('/api/downloads/delete-batch', async (req, res) => {
-  try {
-    const { files } = req.body;
-    if (!Array.isArray(files)) {
-      return res.status(400).json({ error: 'files must be an array' });
-    }
-
-    const deleted = [];
-    const errors = [];
-
-    const resolvedDownloadsDir = path.resolve(downloadsDir);
-
-    for (const relativePath of files) {
-      const filePath = path.join(downloadsDir, relativePath);
-      const resolvedPath = path.resolve(filePath);
-
-      if (!resolvedPath.startsWith(resolvedDownloadsDir)) {
-        errors.push({ file: relativePath, error: 'Directory traversal detected' });
+  const { files } = req.body;
+  if (!validFiles(files)) return res.status(400).json({ error: 'Provide 1–500 filenames' });
+  const deleted = [], errors = [];
+  for (const name of new Set(files)) {
+    try {
+      if (!resolveSafeDownloadPath(name)) {
+        errors.push({ file: name, error: 'Forbidden path' });
         continue;
       }
-
-      if (await fs.pathExists(resolvedPath)) {
-        await fs.remove(resolvedPath);
-        deleted.push(relativePath);
-      } else {
-        errors.push({ file: relativePath, error: 'File not found' });
-      }
-    }
-    
-    logger.info('Batch delete completed', { ip: req.ip, deletedCount: deleted.length, errorCount: errors.length });
-    res.json({ success: true, deleted, errors });
-  } catch (err) {
-    logger.error('Failed batch delete', { error: err.message, ip: req.ip });
-    res.status(500).json({ error: 'Failed batch delete' });
+      await fs.unlink(await resolveDownloadFile(downloadsDir, name));
+      deleted.push(name);
+    } catch (err) { errors.push({ file: name, error: err.status ? err.message : 'Deletion failed' }); }
   }
+  res.json({ success: errors.length === 0, deleted, errors });
 });
 
-// Batch download ZIP
-app.post('/api/downloads/zip', async (req, res) => {
+app.post('/api/downloads/zip', async (req, res, next) => {
   try {
     const { files } = req.body;
-    if (!Array.isArray(files) || files.length === 0) {
-      return res.status(400).json({ error: 'files must be a non-empty array' });
-    }
-
-    const resolvedDownloadsDir = path.resolve(downloadsDir);
-    
-    res.attachment('spotscraper_batch.zip');
-    const archive = archiver('zip', {
-      zlib: { level: 0 } // Fast compression since MP3s are already compressed
-    });
-
-    archive.on('error', function(err) {
-      logger.error('Archive error', { error: err.message });
-      if (!res.headersSent) res.status(500).send({error: err.message});
-    });
-
-    archive.pipe(res);
-
-    for (const relativePath of files) {
-      const filePath = path.join(downloadsDir, relativePath);
-      const resolvedPath = path.resolve(filePath);
-
-      if (resolvedPath.startsWith(resolvedDownloadsDir) && await fs.pathExists(resolvedPath)) {
-        archive.file(resolvedPath, { name: path.basename(relativePath) });
+    if (!validFiles(files)) return res.status(400).json({ error: 'Provide 1–500 filenames' });
+    const entries = [];
+    let bytes = 0;
+    for (const name of new Set(files)) {
+      if (!resolveSafeDownloadPath(name)) {
+        return res.status(403).json({ error: 'Forbidden path' });
       }
+      const file = await resolveDownloadFile(downloadsDir, name);
+      bytes += (await fs.stat(file)).size;
+      if (bytes > 2 * 1024 ** 3) return res.status(413).json({ error: 'ZIP selection exceeds 2 GiB' });
+      entries.push({ file, name: path.relative(downloadsDir, file).replace(/\\/g, '/') });
     }
-
-    archive.finalize();
-  } catch (err) {
-    logger.error('Failed batch zip', { error: err.message, ip: req.ip });
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed batch zip' });
-    }
-  }
+    const archive = new ZipArchive({ zlib: { level: 0 } });
+    archive.on('error', next);
+    res.on('close', () => archive.abort());
+    res.attachment('spotscraper_batch.zip');
+    archive.pipe(res);
+    for (const entry of entries) archive.file(entry.file, { name: entry.name });
+    await archive.finalize();
+  } catch (err) { next(err); }
 });
 
 // Read previous scrape logs
@@ -527,29 +554,30 @@ app.get('/api/logs', async (req, res) => {
       scrapeLog: inMemoryScrapeLog
     });
   } catch (err) {
-    logger.error('Failed to load logs', { error: err.message, ip: req.ip });
+    console.error('Failed to load logs', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to load logs' });
   }
 });
 
 // Internal Webhook for Scrapers
-app.post('/api/internal/log', express.json(), async (req, res) => {
+app.post('/api/internal/log', async (req, res) => {
   try {
     const { type, key, data } = req.body;
+    if (!['downloadLinks', 'scrapeLog'].includes(type) || typeof key !== 'string' || key.length > 1024 || ['__proto__', 'constructor', 'prototype'].includes(key)) return res.status(400).json({ error: 'Invalid log entry' });
     if (type === 'downloadLinks') {
       inMemoryDownloadLinks[key] = data;
-      fs.writeJson(downloadLinksPath, inMemoryDownloadLinks, { spaces: 4 }).catch(err => {
-        logger.error('Failed to flush downloadLinks to disk', { error: err.message });
+      await fs.writeJson(downloadLinksPath, inMemoryDownloadLinks, { spaces: 4 }).catch(err => {
+        console.error('Failed to flush downloadLinks to disk', { error: err.message });
       });
     } else if (type === 'scrapeLog') {
       inMemoryScrapeLog[key] = data;
-      fs.writeJson(scrapeLogPath, inMemoryScrapeLog, { spaces: 4 }).catch(err => {
-        logger.error('Failed to flush scrapeLog to disk', { error: err.message });
+      await fs.writeJson(scrapeLogPath, inMemoryScrapeLog, { spaces: 4 }).catch(err => {
+        console.error('Failed to flush scrapeLog to disk', { error: err.message });
       });
     }
     res.status(200).send('OK');
   } catch (err) {
-    logger.error('Internal log error', { error: err.message });
+    console.error('Internal log error', { error: err.message });
     res.status(500).send('Error');
   }
 });
@@ -557,9 +585,9 @@ app.post('/api/internal/log', express.json(), async (req, res) => {
 // Helper to archive log entries
 async function archiveLogs(downloadLinksKeys, scrapeLogKeys, allDownloadLinks, allScrapeLog) {
   const rootDir = path.join(__dirname, '../..');
-  const archiveLinksPath = path.join(rootDir, 'archive_download_links.json');
-  const archiveScrapePath = path.join(rootDir, 'archive_scrape_log.json');
-  
+  const archiveLinksPath = path.join(stateDir, 'archive_download_links.json');
+  const archiveScrapePath = path.join(stateDir, 'archive_scrape_log.json');
+
   if (downloadLinksKeys.length > 0) {
     let archiveLinks = {};
     if (await fs.pathExists(archiveLinksPath)) {
@@ -619,7 +647,7 @@ app.post('/api/logs/delete-batch', async (req, res) => {
 
     res.json({ success: true, message: `Deleted ${queries.length} logs.` });
   } catch (err) {
-    logger.error('Failed to batch delete logs', { error: err.message, ip: req.ip });
+    console.error('Failed to batch delete logs', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to batch delete logs' });
   }
 });
@@ -640,58 +668,23 @@ app.post('/api/logs/clear', async (req, res) => {
 
     res.json({ success: true, message: 'All logs cleared and archived.' });
   } catch (err) {
-    logger.error('Failed to clear logs', { error: err.message, ip: req.ip });
+    console.error('Failed to clear logs', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to clear logs' });
   }
 });
 
-// Upload Spotify history JSON, CSV or Excel file (Base64 decoder)
-app.post('/api/upload', async (req, res) => {
-  try {
-    const { fileName, content } = req.body;
-    if (!fileName || !content) {
-      return res.status(400).json({ error: 'Missing fileName or content.' });
-    }
-
-    const spotifyDataDir = path.join(__dirname, '../../spotify_data');
-    await fs.ensureDir(spotifyDataDir);
-
-    // Clean up filename to prevent directory traversal
-    const safeName = path.basename(fileName);
-
-    // Whitelist file extensions
-    const ext = path.extname(safeName).toLowerCase();
-    if (!['.json', '.csv', '.xlsx', '.xls'].includes(ext)) {
-      return res.status(400).json({ error: 'Unsupported file type. Only .json, .csv, .xlsx, and .xls files are allowed.' });
-    }
-
-    const targetPath = path.join(spotifyDataDir, safeName);
-
-    // Write file decoding from base64
-    const fileBuffer = Buffer.from(content, 'base64');
-
-    // Restrict size to 50MB
-    const MAX_UPLOAD_SIZE = 50 * 1024 * 1024;
-    if (fileBuffer.length > MAX_UPLOAD_SIZE) {
-      logger.warn('File upload exceeded size limit', { ip: req.ip, file: safeName, size: fileBuffer.length });
-      return res.status(400).json({ error: 'File size exceeds the 50MB limit.' });
-    }
-
-    await fs.writeFile(targetPath, fileBuffer);
-    cachedUserMetadata = null; // Invalidate cache so it is rebuilt on the next query
-
-    logger.info('File uploaded successfully', { ip: req.ip, file: safeName });
-    res.json({ success: true, message: `Successfully uploaded ${safeName}` });
-  } catch (err) {
-    logger.error('Failed to upload file', { error: err.message, ip: req.ip });
-    res.status(500).json({ error: 'Failed to upload file.' });
-  }
-});
+// Stream imports through a single validated router.
+const { createUploadRouter } = require('./uploads');
+app.use('/api', createUploadRouter({
+  spotifyDir: process.env.SPOTIFY_DATA_DIR || path.join(rootDir, 'spotify_data'),
+  appleDir: process.env.APPLE_DATA_DIR || path.join(rootDir, 'apple_music_data'),
+  onUploaded: () => { cachedUserMetadata = null; spotifyStatsCache.invalidate(); appleStatsCache.invalidate(); }
+}));
 
 // List available data source files
 app.get('/api/sources', async (req, res) => {
   try {
-    const spotifyDataDir = path.join(__dirname, '../../spotify_data');
+    const spotifyDataDir = (process.env.SPOTIFY_DATA_DIR || path.join(rootDir, 'spotify_data'));
     if (!(await fs.pathExists(spotifyDataDir))) {
       return res.json({ sources: [] });
     }
@@ -699,7 +692,7 @@ app.get('/api/sources', async (req, res) => {
     const sources = files.filter(f => f.endsWith('.json') || f.endsWith('.csv') || f.endsWith('.xlsx') || f.endsWith('.xls'));
     res.json({ sources });
   } catch (err) {
-    logger.error('Failed to read sources', { error: err.message, ip: req.ip });
+    console.error('Failed to read sources', { error: err.message, ip: req.ip });
     res.status(500).json({ error: 'Failed to read sources' });
   }
 });
@@ -711,8 +704,15 @@ app.post('/api/scrape/start', (req, res, next) => {
       return res.status(400).json({ error: 'A scrape process is already running.' });
     }
 
-    const { script, limit, website, mode, query, sourceFile } = req.body;
-    
+    const { script, limit, website, query, sourceFile } = req.body;
+    if ((script !== undefined && !['api', 'selenium'].includes(script)) ||
+        (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 500)) ||
+        (query !== undefined && (typeof query !== 'string' || query.length > 500)) ||
+        (sourceFile !== undefined && (typeof sourceFile !== 'string' || sourceFile.length > 200 || /[\\/]/.test(sourceFile))) ||
+        (website !== undefined && !['https://qobuz.squid.wtf', 'https://qobuz.squid.wtf/'].includes(website))) {
+      return res.status(400).json({ error: 'Invalid scraper settings (limit 1–500, approved website only).' });
+    }
+
     processType = script || 'api';
     processLog = `Starting ${processType === 'selenium' ? 'High Quality - Albums (320kbps)' : 'Fast MP3 - Tracks (192kbps)'}...\n`;
     if (sourceFile) processLog += `Using data source: ${sourceFile}\n`;
@@ -749,7 +749,7 @@ app.post('/api/scrape/start', (req, res, next) => {
     let pythonExecutable = 'python';
     const venvWinPath = path.join(rootDir, '.venv', 'Scripts', 'python.exe');
     const venvNixPath = path.join(rootDir, '.venv', 'bin', 'python');
-    
+
     if (fsSync.existsSync(venvWinPath)) {
       pythonExecutable = venvWinPath;
     } else if (fsSync.existsSync(venvNixPath)) {
@@ -758,8 +758,10 @@ app.post('/api/scrape/start', (req, res, next) => {
 
     currentProcess = spawn(pythonExecutable, [scriptPath, ...args], {
       cwd: rootDir,
-      env: { 
-        ...process.env, 
+      env: {
+        ...process.env,
+        SCRAPER_INTERNAL_TOKEN: internalToken,
+        DATA_DIR: stateDir,
         PYTHONUNBUFFERED: '1',
         PYTHONIOENCODING: 'utf-8',
         PYTHONUTF8: '1'
@@ -782,20 +784,20 @@ app.post('/api/scrape/start', (req, res, next) => {
     });
 
     currentProcess.on('error', (err) => {
-      logger.error('Failed to start scrape process', { error: err.message, scriptPath, args });
+      console.error('Failed to start scrape process', { error: err.message, scriptPath, args });
       processLog += `\nFailed to start process: ${err.message}\n`;
       processStatus = 'error';
       currentProcess = null;
     });
 
     currentProcess.on('close', (code) => {
-      logger.info('Scrape process finished', { code, scriptPath });
+      console.log('Scrape process finished', { code, scriptPath });
       processLog += `\nProcess exited with code ${code}\n`;
       processStatus = code === 0 ? 'success' : 'error';
       currentProcess = null;
     });
 
-    logger.info('Scrape process started', { ip: req.ip, script: processType, query, limit, sourceFile: safeSourceFile });
+    console.log('Scrape process started', { ip: req.ip, script: processType, query, limit, sourceFile: safeSourceFile });
     res.json({ success: true, status: processStatus });
   } catch (err) {
     next(err);
@@ -819,7 +821,7 @@ app.post('/api/scrape/stop', (req, res) => {
     processStatus = 'idle';
     processLog += '\n--- Process terminated by user ---\n';
     currentProcess = null;
-    logger.info('Scrape process stopped by user', { ip: req.ip });
+    console.log('Scrape process stopped by user', { ip: req.ip });
     res.json({ success: true, message: 'Scrape process cancelled.' });
   } else {
     res.status(400).json({ error: 'No scrape process running.' });
@@ -828,12 +830,17 @@ app.post('/api/scrape/stop', (req, res) => {
 
 // Global Error Handler Middleware (CWE-756 / CWE-248)
 app.use((err, req, res, next) => {
-  logger.error('Unhandled server error', { error: err.message, stack: err.stack, ip: req.ip, path: req.path });
-  res.status(500).json({ error: 'An unexpected server error occurred. Please try again later.' });
+  if (!err.status || err.status >= 500) console.error('Server error', { error: err.message, path: req.path });
+  if (res.headersSent) return next(err);
+  const status = err.status >= 400 && err.status < 500 ? err.status : 500;
+  res.status(status).json({ error: status < 500 ? err.message : 'An unexpected server error occurred.' });
 });
 
 // Start Express Server
 const host = process.env.HOST || '127.0.0.1';
-app.listen(port, host, () => {
-  logger.info(`Backend listening at http://${host}:${port}`);
-});
+if (require.main === module) {
+  ready.then(() => app.listen(Number(process.env.PORT || port), host, () => {
+    console.log(`Backend listening on ${host}`);
+  })).catch(err => { console.error(err.message); process.exitCode = 1; });
+}
+module.exports = { app, ready };

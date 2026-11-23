@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export default function ListeningTrendChart({ data = [], isAllPlatforms = false }) {
   const [selectedYear, setSelectedYear] = useState('All');
   const [splitPlatforms, setSplitPlatforms] = useState(false);
+  const [, startTransition] = useTransition();
 
   // Extract unique years for the dropdown
   const years = useMemo(() => {
@@ -26,8 +27,6 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
     }));
   }, [data, selectedYear]);
 
-  if (chartData.length === 0) return null;
-
   return (
     <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)] col-span-1 md:col-span-2 lg:col-span-3 transition-all duration-300">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2">
@@ -37,18 +36,44 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
         </div>
         <div className="flex items-center gap-3">
           {isAllPlatforms && (
-            <label className="flex items-center gap-2 text-xs font-medium cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
-              <input
-                type="checkbox"
-                checked={splitPlatforms}
-                onChange={(e) => setSplitPlatforms(e.target.checked)}
-                className="accent-primary rounded bg-transparent border-white/20 cursor-pointer"
-              />
+            <label
+              className="flex items-center gap-2 text-xs font-medium cursor-pointer text-muted-foreground hover:text-foreground transition-colors select-none"
+              title="Split by platform"
+            >
+              {/* Toggle switch */}
+              <span
+                role="checkbox"
+                aria-checked={splitPlatforms}
+                onClick={() => startTransition(() => setSplitPlatforms(p => !p))}
+                style={{
+                  display: 'inline-flex',
+                  width: 32,
+                  height: 18,
+                  borderRadius: 9999,
+                  background: splitPlatforms ? '#1ed760' : 'oklch(0.3 0 0 / 60%)',
+                  transition: 'background 200ms cubic-bezier(0.23,1,0.32,1)',
+                  position: 'relative',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{
+                  position: 'absolute',
+                  top: 2,
+                  left: splitPlatforms ? 16 : 2,
+                  width: 14,
+                  height: 14,
+                  borderRadius: '50%',
+                  background: '#fff',
+                  transition: 'left 200ms cubic-bezier(0.23,1,0.32,1)',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                }} />
+              </span>
               Split Platforms
             </label>
           )}
           
-          <Select value={selectedYear} onValueChange={(v) => setSelectedYear(v)}>
+          <Select value={selectedYear} onValueChange={(v) => startTransition(() => setSelectedYear(v))}>
             <SelectTrigger className="w-[110px] h-8 text-xs font-semibold">
               <SelectValue placeholder="Select year" />
             </SelectTrigger>
@@ -60,6 +85,11 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
         </div>
       </CardHeader>
       <CardContent>
+        {chartData.length === 0 ? (
+          <div className="w-full h-[280px] flex items-center justify-center">
+            <p className="text-muted-foreground text-sm">No listening data for {selectedYear === 'All' ? 'this platform' : selectedYear}.</p>
+          </div>
+        ) : (
         <div className="w-full h-[280px] animate-in fade-in duration-700">
           <ResponsiveContainer>
             <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -85,10 +115,11 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
                 domain={['dataMin', 'dataMax']}
                 tickFormatter={(v) => {
                   const d = new Date(v);
+                  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                   if (selectedYear === 'All') {
-                    return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+                    return `${months[d.getUTCMonth()]} '${d.getUTCFullYear().toString().slice(2)}`;
                   }
-                  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+                  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
                 }}
                 axisLine={false}
                 tickLine={false}
@@ -128,6 +159,8 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
                   fill="url(#totalGradient)"
                   dot={false}
                   activeDot={{ r: 5, fill: 'oklch(0.65 0.2 280)', stroke: '#fff', strokeWidth: 2 }}
+                  animationDuration={800}
+                  animationEasing="ease-out"
                 />
               ) : (
                 <>
@@ -140,6 +173,8 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
                     fill="url(#spotifyGradient)"
                     dot={false}
                     activeDot={{ r: 5, fill: '#1DB954', stroke: '#fff', strokeWidth: 2 }}
+                    animationDuration={800}
+                    animationEasing="ease-out"
                   />
                   <Area
                     type="monotone"
@@ -150,12 +185,15 @@ export default function ListeningTrendChart({ data = [], isAllPlatforms = false 
                     fill="url(#appleGradient)"
                     dot={false}
                     activeDot={{ r: 5, fill: '#FA243C', stroke: '#fff', strokeWidth: 2 }}
+                    animationDuration={800}
+                    animationEasing="ease-out"
                   />
                 </>
               )}
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        )}
       </CardContent>
     </Card>
   );

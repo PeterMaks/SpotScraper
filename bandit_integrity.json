@@ -28,32 +28,6 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    ".\\dashboard\\frontend\\node_modules\\flatted\\python\\flatted.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 100,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
-    ".\\dashboard\\node_modules\\shell-quote\\print.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 2,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
     ".\\qobuz_scrapper.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
@@ -89,7 +63,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 1446,
+      "loc": 1344,
       "nosec": 0,
       "skipped_tests": 0
     }
