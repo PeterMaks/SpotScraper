@@ -1,4 +1,5 @@
-import React from 'react';
+
+import { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from "react";
 import { useAppContext } from '../AppContext';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,47 +57,52 @@ function mergeStats(a, b) {
       hours: Math.round((item.hours + (dB?.[i]?.hours || 0)) * 10) / 10,
     }));
 
+  const mergedTrend = mergeTrend(a.dailyTrend, b.dailyTrend);
+  const totalHours = Math.round((a.totalHours + b.totalHours) * 10) / 10;
+  const mergedArtists = mergeTop(a.topArtists, b.topArtists);
+  const mergedTracks = mergeTop(a.topTracks, b.topTracks, true);
+
   return {
-    totalHours:        Math.round((a.totalHours + b.totalHours) * 10) / 10,
+    totalHours,
     totalMusicHours:   Math.round((a.totalMusicHours + b.totalMusicHours) * 10) / 10,
     totalPodcastHours: Math.round((a.totalPodcastHours + b.totalPodcastHours) * 10) / 10,
-    uniqueArtists:     a.uniqueArtists + b.uniqueArtists,
-    uniqueTracks:      a.uniqueTracks + b.uniqueTracks,
-    uniquePodcasts:    a.uniquePodcasts + b.uniquePodcasts,
-    totalPlays:        a.totalPlays + b.totalPlays,
-    skippedCount:      a.skippedCount + b.skippedCount,
-    maxStreak:         Math.max(a.maxStreak, b.maxStreak),
-    avgDailyHours:     Math.round(((a.avgDailyHours + b.avgDailyHours) / 2) * 10) / 10,
-    topArtists:        mergeTop(a.topArtists, b.topArtists).slice(0, 20),
-    topTracks:         mergeTop(a.topTracks, b.topTracks, true).slice(0, 20),
+    uniqueArtists:     Math.max(mergedArtists.length, Math.max(a.uniqueArtists || 0, b.uniqueArtists || 0)),
+    uniqueTracks:      Math.max(mergedTracks.length, Math.max(a.uniqueTracks || 0, b.uniqueTracks || 0)),
+    uniquePodcasts:    Math.max((a.uniquePodcasts || 0), (b.uniquePodcasts || 0)),
+    totalPlays:        (a.totalPlays || 0) + (b.totalPlays || 0),
+    skippedCount:      (a.skippedCount || 0) + (b.skippedCount || 0),
+    maxStreak:         Math.max(a.maxStreak || 0, b.maxStreak || 0),
+    avgDailyHours:     mergedTrend.length > 0 ? Math.round((totalHours / mergedTrend.length) * 10) / 10 : 0,
+    topArtists:        mergedArtists.slice(0, 20),
+    topTracks:         mergedTracks.slice(0, 20),
     topPodcasts:       mergeTop(a.topPodcasts, b.topPodcasts).slice(0, 10),
     topAlbums:         mergeTop(a.topAlbums, b.topAlbums).slice(0, 10),
     topGenres:         mergeTop(a.topGenres, b.topGenres).slice(0, 15),
     listeningByDay:    mergeByDay(a.listeningByDay, b.listeningByDay),
     listeningByTime:   mergeByTime(a.listeningByTime, b.listeningByTime),
-    dailyTrend:        mergeTrend(a.dailyTrend, b.dailyTrend),
+    dailyTrend:        mergedTrend,
   };
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 function NumberPopIn({ value }) {
-  const [isAnimating, setIsAnimating] = React.useState(false);
-  const prevValueRef = React.useRef(value);
+  
+  const prevValueRef = useRef(value);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (prevValueRef.current !== value) {
       prevValueRef.current = value;
-      setIsAnimating(false);
-      const raf = requestAnimationFrame(() => setIsAnimating(true));
+      
+      const raf = requestAnimationFrame(() => {});
       return () => cancelAnimationFrame(raf);
     }
   }, [value]);
 
-  React.useEffect(() => { setIsAnimating(true); }, []);
+  
 
   const str = String(value ?? '');
   return (
-    <span className={`t-digit-group ${isAnimating ? 'is-animating' : ''}`}>
+    <span className="inline-flex flex-nowrap whitespace-nowrap t-number-pop">
       {str.split('').map((ch, i) => {
         const stagger = i === str.length - 2 ? "1" : i === str.length - 1 ? "2" : undefined;
         return <span key={i} className="t-digit" data-stagger={stagger}>{ch}</span>;
@@ -107,15 +113,31 @@ function NumberPopIn({ value }) {
 
 function StatCard({ label, value, unit, accent, footnote }) {
   return (
-    <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)] transition-all duration-300 hover:shadow-[0_8px_40px_rgba(0,0,0,0.12)] hover:scale-[1.02]">
-      <CardHeader className="pb-1">
-        <CardDescription className="text-xs font-medium">{label}</CardDescription>
+    <Card
+      className="bg-card border border-border shadow-sm p-6 cursor-default"
+      style={{
+        transition:
+          'transform 200ms cubic-bezier(0.23,1,0.32,1), box-shadow 200ms cubic-bezier(0.23,1,0.32,1)',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.boxShadow = '0 8px 32px rgba(30,215,96,0.12), 0 4px 12px rgba(0,0,0,0.15)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = '';
+        e.currentTarget.style.boxShadow = '';
+      }}
+      onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.98)'; }}
+      onMouseUp={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+    >
+      <CardHeader className="pb-2">
+        <CardDescription className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-1.5">
-        <p className={`font-semibold text-2xl tabular-nums ${accent || ''}`}>
-          <NumberPopIn value={value} /> {unit && <span className="text-sm font-normal text-muted-foreground">{unit}</span>}
+      <CardContent>
+        <p className={`font-extrabold text-3xl tabular-nums ${accent || ''}`}>
+          <NumberPopIn value={value} /> {unit && <span className="text-base font-medium text-muted-foreground">{unit}</span>}
         </p>
-        {footnote && <span className="text-xs text-muted-foreground">{footnote}</span>}
+        {footnote && <span className="text-xs text-muted-foreground mt-2 block font-medium">{footnote}</span>}
       </CardContent>
     </Card>
   );
@@ -127,19 +149,39 @@ const TOGGLE_VIEWS = [
   { key: 'apple',   label: 'Apple Music' },
 ];
 
+/**
+ * Sliding-pill tab strip — uses the .t-tabs / .t-tabs-pill CSS already defined
+ * in index.css. The indicator physically moves between options.
+ */
 function PlatformToggle({ view, setView }) {
+  const tabRefs = useRef([]);
+  const pillRef = useRef(null);
+
+  const movePill = useCallback((idx) => {
+    const tab = tabRefs.current[idx];
+    const pill = pillRef.current;
+    if (!tab || !pill) return;
+    pill.style.width = `${tab.offsetWidth}px`;
+    pill.style.transform = `translateX(${tab.offsetLeft}px)`;
+  }, []);
+
+  useLayoutEffect(() => {
+    const idx = TOGGLE_VIEWS.findIndex(v => v.key === view);
+    movePill(idx >= 0 ? idx : 0);
+  }, [view, movePill]);
+
   return (
-    <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 backdrop-blur-sm border border-white/10">
-      {TOGGLE_VIEWS.map(({ key, label }) => (
+    <div className="t-tabs" role="tablist">
+      <div ref={pillRef} className="t-tabs-pill" />
+      {TOGGLE_VIEWS.map(({ key, label }, idx) => (
         <button
           key={key}
           id={`platform-toggle-${key}`}
+          ref={el => { tabRefs.current[idx] = el; }}
+          role="tab"
+          aria-selected={view === key}
           onClick={() => setView(key)}
-          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-            view === key
-              ? 'bg-background shadow-sm text-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-          }`}
+          className="t-tab"
         >
           {label}
         </button>
@@ -163,10 +205,56 @@ export default function Dashboard() {
     uploading,
     handleFileUpload,
     backendUrl,
+    isDesktop,
+    openNativeFileDialog,
+    fetchSources,
+    setUploadStatus,
+    setUploading,
   } = useAppContext();
 
-  const [appleUploading, setAppleUploading] = React.useState(false);
-  const [appleUploadStatus, setAppleUploadStatus] = React.useState('');
+  const [appleUploading, setAppleUploading] = useState(false);
+  const [appleUploadStatus, setAppleUploadStatus] = useState('');
+
+  const triggerNativeAppleImport = async () => {
+    if (!isDesktop || !openNativeFileDialog) return;
+    try {
+      setAppleUploading(true);
+      setAppleUploadStatus('Importing Apple Music files...');
+      const count = await openNativeFileDialog('apple');
+      if (count > 0) {
+        setAppleUploadStatus(`Imported ${count} file(s). Refreshing...`);
+        fetchAppleStats();
+      } else {
+        setAppleUploadStatus('');
+      }
+    } catch (err) {
+      setAppleUploadStatus(`Import failed: ${err.message}`);
+    } finally {
+      setAppleUploading(false);
+      setTimeout(() => setAppleUploadStatus(''), 5000);
+    }
+  };
+
+  const triggerNativeSpotifyImport = async () => {
+    if (!isDesktop || !openNativeFileDialog) return;
+    try {
+      setUploading(true);
+      setUploadStatus('Importing Spotify files...');
+      const count = await openNativeFileDialog('spotify');
+      if (count > 0) {
+        setUploadStatus(`Imported ${count} file(s). Refreshing...`);
+        fetchStats();
+        if (fetchSources) fetchSources();
+      } else {
+        setUploadStatus('');
+      }
+    } catch (err) {
+      setUploadStatus(`Import failed: ${err.message}`);
+    } finally {
+      setUploading(false);
+      setTimeout(() => setUploadStatus(''), 5000);
+    }
+  };
 
   const handleAppleUpload = async (e) => {
     const files = e.target.files;
@@ -176,18 +264,22 @@ export default function Dashboard() {
     let ok = 0;
     try {
       for (const file of files) {
-        const base64 = await new Promise((res, rej) => {
-          const r = new FileReader();
-          r.onload = () => res(r.result.split(',')[1]);
-          r.onerror = () => rej(r.error);
-          r.readAsDataURL(file);
-        });
+        if (!/\.(csv|json)$/i.test(file.name)) {
+          throw new Error('Upload CSV or JSON files only.');
+        }
+        const formData = new FormData();
+        formData.append('file', file);
         const resp = await fetch(`${backendUrl}/api/apple/upload`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: file.name, content: base64 }),
+          body: formData,
         });
-        if (resp.ok) ok++;
+        if (!resp.ok) {
+          const message = await resp.text();
+          throw new Error(`Server returned ${resp.status}: ${message.slice(0, 100) || resp.statusText}`);
+        }
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Server did not accept the file.');
+        ok++;
       }
       setAppleUploadStatus(`Uploaded ${ok} file(s). Refreshing...`);
       fetchAppleStats();
@@ -199,11 +291,19 @@ export default function Dashboard() {
     }
   };
 
-  const selectedStats = React.useMemo(() => {
+  const selectedStats = useMemo(() => {
     if (platformView === 'spotify') return stats;
     if (platformView === 'apple')   return appleStats;
     return mergeStats(stats, appleStats);
   }, [platformView, stats, appleStats]);
+
+  const hasData = Boolean(
+    selectedStats && (
+      selectedStats.totalHours > 0 ||
+      selectedStats.totalPlays > 0 ||
+      (selectedStats.topTracks?.length || 0) > 0
+    )
+  );
 
   const isLoading = platformView === 'spotify' ? loadingStats
     : platformView === 'apple' ? loadingAppleStats
@@ -214,35 +314,48 @@ export default function Dashboard() {
     : 'All Platforms';
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8 pb-32">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Recaps &amp; Insights</h2>
-          <p className="text-muted-foreground mt-1">Listening stats · {platformLabel}</p>
+          <h2 className="text-4xl font-extrabold tracking-tight">Recaps &amp; Insights</h2>
+          <p className="text-muted-foreground mt-2 text-lg">Listening stats · {platformLabel}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <PlatformToggle view={platformView} setView={setPlatformView} />
-          <Button variant="secondary" onClick={() => { fetchStats(); fetchAppleStats(); }} disabled={isLoading}>
+          <Button variant="secondary" size="lg" onClick={() => { fetchStats(); fetchAppleStats(); }} disabled={isLoading}>
+            <svg className="mr-2 size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             Refresh
           </Button>
         </div>
       </div>
 
       {/* Upload Cards */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
-          <CardHeader>
-            <CardTitle>Spotify Data</CardTitle>
-            <CardDescription>StreamingHistory*.json, Playlist*.json, .csv / .xlsx</CardDescription>
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card className="bg-card border border-dashed border-border shadow-sm transition-colors hover:border-primary/50 p-6">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xl">Spotify Data</CardTitle>
+            <CardDescription>StreamingHistory*.json, Playlist*.json, or .csv (CSV and JSON only)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4">
-              <Button asChild disabled={uploading}>
+              <Button asChild disabled={uploading} size="lg">
                 <label className="cursor-pointer">
                   <svg className="mr-2 size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                   Choose Files
-                  <input type="file" multiple accept=".json,.csv" onChange={handleFileUpload} className="hidden" disabled={uploading} />
+                  <input
+                    type="file"
+                    multiple
+                    accept=".csv,.json"
+                    onClick={async (e) => {
+                      if (!isDesktop) return;
+                      e.preventDefault();
+                      await triggerNativeSpotifyImport();
+                    }}
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    disabled={uploading}
+                  />
                 </label>
               </Button>
               {uploadStatus && (
@@ -252,18 +365,30 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
-          <CardHeader>
-            <CardTitle>Apple Music Data</CardTitle>
-            <CardDescription>Apple Music - Play History Daily Tracks .csv</CardDescription>
+        <Card className="bg-card border border-dashed border-border shadow-sm transition-colors hover:border-primary/50 p-6">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xl">Apple Music Data</CardTitle>
+            <CardDescription>Apple Music play history .csv or .json (CSV and JSON only)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4">
-              <Button asChild disabled={appleUploading}>
+              <Button asChild disabled={appleUploading} size="lg">
                 <label className="cursor-pointer">
                   <svg className="mr-2 size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                   Choose Files
-                  <input type="file" multiple accept=".csv,.json" onChange={handleAppleUpload} className="hidden" disabled={appleUploading} />
+                  <input
+                    type="file"
+                    multiple
+                    accept=".csv,.json"
+                    onClick={async (e) => {
+                      if (!isDesktop) return;
+                      e.preventDefault();
+                      await triggerNativeAppleImport();
+                    }}
+                    onChange={handleAppleUpload}
+                    className="hidden"
+                    disabled={appleUploading}
+                  />
                 </label>
               </Button>
               {appleUploadStatus && (
@@ -275,62 +400,86 @@ export default function Dashboard() {
       </div>
 
       {isLoading ? (
-        <div className="text-center p-10 animate-pulse text-muted-foreground">
-          <p>Aggregating {platformLabel} stats...</p>
+        /* Shimmer skeleton that matches the real layout */
+        <div className="flex flex-col gap-8">
+          {/* Stat cards skeleton */}
+          <div className="grid gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="rounded-xl border border-border p-6 flex flex-col gap-3">
+                <div className="skeleton-shimmer h-3 w-20 rounded" />
+                <div className="skeleton-shimmer h-8 w-16 rounded" />
+                <div className="skeleton-shimmer h-3 w-12 rounded" />
+              </div>
+            ))}
+          </div>
+          {/* Chart area skeleton */}
+          <div className="grid gap-6 grid-cols-1 lg:grid-cols-4">
+            <div className="skeleton-shimmer h-64 rounded-xl col-span-1 lg:col-span-3" />
+            <div className="skeleton-shimmer h-64 rounded-xl" />
+          </div>
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="skeleton-shimmer h-48 rounded-xl" />
+            <div className="skeleton-shimmer h-48 rounded-xl" />
+          </div>
+          <p className="text-center text-sm text-muted-foreground mt-2">Aggregating {platformLabel} stats&hellip;</p>
         </div>
-      ) : selectedStats ? (
-        <div className="flex flex-col gap-6">
+      ) : hasData ? (
+        <div className="flex flex-col gap-8">
 
-          {/* Stat Cards */}
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-            <StatCard label="Total Listening" value={selectedStats.totalHours} unit="Hrs" />
-            <StatCard label="Music Playtime" value={selectedStats.totalMusicHours} unit="Hrs" accent="text-purple-500" />
-            <StatCard label="Podcast Playtime" value={selectedStats.totalPodcastHours} unit="Hrs" accent="text-blue-500" />
-            <StatCard
-              label="Unique Artists"
-              value={selectedStats.uniqueArtists}
-              footnote={selectedStats.uniqueTracks ? `${selectedStats.uniqueTracks} tracks` : undefined}
-            />
-            <StatCard
-              label="Listening Streak"
-              value={selectedStats.maxStreak || '—'}
-              unit={selectedStats.maxStreak ? 'days' : ''}
-              footnote={selectedStats.avgDailyHours ? `~${selectedStats.avgDailyHours}h/day avg` : undefined}
-            />
+          {/* Stat Cards — stagger in on mount */}
+          <div className="grid gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            <div className="stagger-item"><StatCard label="Total Listening" value={selectedStats.totalHours} unit="Hrs" /></div>
+            <div className="stagger-item"><StatCard label="Music Playtime" value={selectedStats.totalMusicHours} unit="Hrs" accent="text-green-500" /></div>
+            <div className="stagger-item"><StatCard label="Podcast Playtime" value={selectedStats.totalPodcastHours} unit="Hrs" accent="text-emerald-400" /></div>
+            <div className="stagger-item">
+              <StatCard
+                label="Unique Artists"
+                value={selectedStats.uniqueArtists}
+                footnote={selectedStats.uniqueTracks ? `${selectedStats.uniqueTracks} tracks` : undefined}
+              />
+            </div>
+            <div className="stagger-item">
+              <StatCard
+                label="Listening Streak"
+                value={selectedStats.maxStreak || '—'}
+                unit={selectedStats.maxStreak ? 'days' : ''}
+                footnote={selectedStats.avgDailyHours ? `~${selectedStats.avgDailyHours}h/day avg` : undefined}
+              />
+            </div>
           </div>
 
           {/* Trend + Time of Day */}
-          <div className="grid gap-4 grid-cols-1 lg:grid-cols-4">
+          <div className="grid gap-6 grid-cols-1 lg:grid-cols-4">
             <ListeningTrendChart data={selectedStats.dailyTrend || []} isAllPlatforms={platformView === 'all'} />
             <TimeOfDayChart data={selectedStats.listeningByTime || []} />
           </div>
 
           {/* Day of Week + Genres */}
-          <div className="grid gap-4 grid-cols-1 lg:grid-cols-4">
+          <div className="grid gap-6 grid-cols-1 lg:grid-cols-4">
             <DayOfWeekChart data={selectedStats.listeningByDay || []} />
-            <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)] col-span-1 md:col-span-2">
-              <CardHeader>
-                <CardTitle>Top Genres</CardTitle>
+            <Card className="bg-card border border-border shadow-sm col-span-1 md:col-span-2 p-6">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-xl">Top Genres</CardTitle>
                 <CardDescription>By total listening hours</CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col gap-3">
+              <CardContent className="flex flex-col gap-4">
                 {(selectedStats.topGenres || []).slice(0, 10).map((genre, idx) => {
                   const pct = (genre.hours / ((selectedStats.topGenres || [])[0]?.hours || 1)) * 100;
                   return (
-                    <div key={genre.name} className="flex flex-col gap-1">
+                    <div key={genre.name} className="stagger-item flex flex-col gap-1.5">
                       <div className="flex justify-between items-center text-sm">
-                        <span className="font-medium truncate pr-4 capitalize">
-                          <Badge variant="outline" className="mr-2 text-[10px] tabular-nums py-0">{idx + 1}</Badge>
+                        <span className="font-semibold truncate pr-4 capitalize flex items-center gap-2">
+                          <Badge variant="secondary" className="text-[10px] tabular-nums py-0 px-1.5 rounded-md">{idx + 1}</Badge>
                           {genre.name}
                         </span>
-                        <span className="text-muted-foreground shrink-0 tabular-nums">{genre.hours} hrs</span>
+                        <span className="text-muted-foreground shrink-0 tabular-nums font-medium">{genre.hours} hrs</span>
                       </div>
-                      <Progress value={pct} className="h-1.5" />
+                      <div className="progress-animate"><Progress value={pct} className="h-2" /></div>
                     </div>
                   );
                 })}
                 {(!selectedStats.topGenres || selectedStats.topGenres.length === 0) && (
-                  <p className="text-muted-foreground text-center py-4 text-sm">
+                  <p className="text-muted-foreground text-center py-8 text-sm">
                     No genre data found. Make sure library/JSON export is present.
                   </p>
                 )}
@@ -340,58 +489,58 @@ export default function Dashboard() {
 
           {/* Top Artists + Tracks */}
           <div className="grid gap-6 md:grid-cols-2">
-            <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
-              <CardHeader>
-                <CardTitle>Top Artists</CardTitle>
+            <Card className="bg-card border border-border shadow-sm p-6">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-xl">Top Artists</CardTitle>
                 <CardDescription>Top 20</CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col gap-4">
+              <CardContent className="flex flex-col gap-5">
                 {selectedStats.topArtists.slice(0, 10).map((artist, idx) => {
                   const pct = (artist.hours / (selectedStats.topArtists[0]?.hours || 1)) * 100;
                   return (
-                    <div key={artist.name} className="flex flex-col gap-1.5">
+                    <div key={artist.name} className="stagger-item flex flex-col gap-2">
                       <div className="flex justify-between items-center text-sm">
-                        <span className="font-medium truncate pr-4">{idx + 1}. {artist.name}</span>
-                        <span className="text-muted-foreground shrink-0">{artist.hours} hrs</span>
+                        <span className="font-semibold truncate pr-4">{idx + 1}. {artist.name}</span>
+                        <span className="text-muted-foreground shrink-0 font-medium">{artist.hours} hrs</span>
                       </div>
-                      <Progress value={pct} className="h-2" />
+                      <div className="progress-animate"><Progress value={pct} className="h-2" /></div>
                     </div>
                   );
                 })}
                 {selectedStats.topArtists.length === 0 && (
-                  <p className="text-muted-foreground text-center py-4">No artist data found.</p>
+                  <p className="text-muted-foreground text-center py-8">No artist data found.</p>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
-              <CardHeader>
-                <CardTitle>Top Tracks</CardTitle>
+            <Card className="bg-card border border-border shadow-sm p-6">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-xl">Top Tracks</CardTitle>
                 <CardDescription>Top 20</CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Track Info</TableHead>
-                      <TableHead className="text-right">Playtime</TableHead>
+                    <TableRow className="border-border hover:bg-transparent">
+                      <TableHead className="text-muted-foreground">Track Info</TableHead>
+                      <TableHead className="text-right text-muted-foreground">Playtime</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {selectedStats.topTracks.slice(0, 10).map((track, idx) => (
-                      <TableRow key={`${track.name}-${track.artist}`}>
-                        <TableCell>
-                          <div className="font-semibold">{idx + 1}. {track.name}</div>
-                          <div className="text-sm text-muted-foreground">{track.artist} • {track.album}</div>
+                      <TableRow key={`${track.name}-${track.artist}`} className="stagger-item border-border">
+                        <TableCell className="py-3">
+                          <div className="font-semibold text-sm">{idx + 1}. {track.name}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{track.artist} • {track.album}</div>
                         </TableCell>
-                        <TableCell className="text-right font-medium text-muted-foreground tabular-nums">
+                        <TableCell className="text-right font-semibold text-muted-foreground tabular-nums py-3">
                           {track.hours} hrs
                         </TableCell>
                       </TableRow>
                     ))}
                     {selectedStats.topTracks.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={2} className="text-center text-muted-foreground">No track data found.</TableCell>
+                        <TableCell colSpan={2} className="text-center text-muted-foreground py-8">No track data found.</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -403,21 +552,21 @@ export default function Dashboard() {
           {/* Top Albums + Podcasts */}
           <div className="grid gap-6 md:grid-cols-2">
             {(selectedStats.topAlbums || []).length > 0 && (
-              <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
-                <CardHeader>
-                  <CardTitle>Top Albums</CardTitle>
+              <Card className="bg-card border border-border shadow-sm p-6">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-xl">Top Albums</CardTitle>
                   <CardDescription>By Playtime</CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-3">
+                <CardContent className="flex flex-col gap-4">
                   {selectedStats.topAlbums.slice(0, 10).map((album, idx) => {
                     const pct = (album.hours / (selectedStats.topAlbums[0]?.hours || 1)) * 100;
                     return (
-                      <div key={album.name} className="flex flex-col gap-1">
+                      <div key={album.name} className="flex flex-col gap-1.5">
                         <div className="flex justify-between items-center text-sm">
-                          <span className="font-medium truncate pr-4">{idx + 1}. {album.name}</span>
-                          <span className="text-muted-foreground shrink-0 tabular-nums">{album.hours} hrs</span>
+                          <span className="font-semibold truncate pr-4">{idx + 1}. {album.name}</span>
+                          <span className="text-muted-foreground shrink-0 tabular-nums font-medium">{album.hours} hrs</span>
                         </div>
-                        <Progress value={pct} className="h-1.5" />
+                        <Progress value={pct} className="h-2" />
                       </div>
                     );
                   })}
@@ -426,19 +575,19 @@ export default function Dashboard() {
             )}
 
             {(selectedStats.topPodcasts || []).length > 0 && (
-              <Card className="backdrop-blur-xl bg-card/40 border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
-                <CardHeader>
-                  <CardTitle>Top Podcasts</CardTitle>
+              <Card className="bg-card border border-border shadow-sm p-6">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-xl">Top Podcasts</CardTitle>
                   <CardDescription>By Playtime</CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-3">
+                <CardContent className="flex flex-col gap-4">
                   {selectedStats.topPodcasts.map((podcast, idx) => {
                     const pct = (podcast.hours / (selectedStats.topPodcasts[0]?.hours || 1)) * 100;
                     return (
-                      <div key={podcast.name} className="flex flex-col gap-1.5 p-3 rounded-lg border border-white/10 bg-card/30 backdrop-blur-md">
+                      <div key={podcast.name} className="flex flex-col gap-1.5 p-3 rounded-lg bg-card backdrop-blur-md border border-border">
                         <div className="flex justify-between items-center text-sm">
-                          <span className="font-medium truncate pr-2">{idx + 1}. {podcast.name}</span>
-                          <span className="text-muted-foreground shrink-0">{podcast.hours} hrs</span>
+                          <span className="font-semibold truncate pr-2">{idx + 1}. {podcast.name}</span>
+                          <span className="text-muted-foreground shrink-0 font-medium">{podcast.hours} hrs</span>
                         </div>
                         <Progress value={pct} className="h-1.5" />
                       </div>
@@ -451,15 +600,16 @@ export default function Dashboard() {
 
         </div>
       ) : (
-        <Card className="text-center p-12 backdrop-blur-xl bg-card/40 border-white/20">
-          <CardTitle className="mb-2">No {platformLabel} Data Found</CardTitle>
-          <CardDescription>
+        <Card className="text-center p-16 bg-card border border-dashed border-border">
+          <CardTitle className="mb-3 text-2xl">No {platformLabel} Data Found</CardTitle>
+          <CardDescription className="text-base">
             {platformView === 'apple'
-              ? <>Upload your Apple Music CSV file above, or place it in <code className="bg-muted px-1 rounded">apple_music_data/csvs</code>.</>
-              : <>Place your Spotify JSON files in <code className="bg-muted px-1 rounded">spotify_data/</code>.</>}
+              ? <>Upload your Apple Music CSV file above, or place it in <code className="bg-muted px-1.5 py-0.5 rounded-md text-primary text-sm">apple_music_data/csvs</code>.</>
+              : <>Place your Spotify JSON files in <code className="bg-muted px-1.5 py-0.5 rounded-md text-primary text-sm">spotify_data/</code>.</>}
           </CardDescription>
         </Card>
       )}
     </div>
   );
 }
+

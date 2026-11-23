@@ -1,4 +1,4 @@
-FROM node:slim
+FROM node:22-bookworm-slim
 
 WORKDIR /app
 
@@ -22,14 +22,16 @@ COPY dashboard/backend/package.json dashboard/backend/package-lock.json ./dashbo
 RUN cd dashboard/backend && npm ci --omit=dev
 
 # Copy backend source
-COPY dashboard/backend/server.js dashboard/backend/parser.js dashboard/backend/apple_parser.js dashboard/backend/logger.js ./dashboard/backend/
+COPY dashboard/backend/*.js ./dashboard/backend/
 
 # Copy and prepare entrypoint
 COPY dashboard/backend/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 # Create logs directory
-RUN mkdir -p dashboard/backend/logs
+RUN mkdir -p dashboard/backend/logs /app/data /app/downloads /app/spotify_data /app/apple_music_data && chown -R node:node /app
+ENV DATA_DIR=/app/data
+USER node
 
 EXPOSE 3001
 

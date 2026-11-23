@@ -1,6 +1,6 @@
+
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+/* Tailwind 3 animations are supplied by tailwindcss-animate in the config. */
 @import "@fontsource-variable/geist";
 
 @tailwind base;
@@ -14,74 +14,74 @@
   }
 
   :root {
-    --background: oklch(0.98 0 0 / 0%);
-    /* Transparent to show the fancy bg */
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0 / 40%);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0 / 75%);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0 / 50%);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0 / 50%);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0 / 50%);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0 / 30%);
-    --input: oklch(0.922 0 0 / 30%);
-    --ring: oklch(0.708 0 0 / 50%);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 1rem;
-    --sidebar: oklch(1 0 0 / 30%);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0 / 50%);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0 / 20%);
-    --sidebar-ring: oklch(0.708 0 0 / 50%);
+    --background: #ffffff;
+    --foreground: #09090b;
+    --card: #ffffff;
+    --card-foreground: #09090b;
+    --popover: #ffffff;
+    --popover-foreground: #09090b;
+    --primary: #1ed760;
+    --primary-foreground: #000000;
+    --secondary: #f4f4f5;
+    --secondary-foreground: #18181b;
+    --muted: #f4f4f5;
+    --muted-foreground: #71717a;
+    --accent: #f4f4f5;
+    --accent-foreground: #18181b;
+    --destructive: #ef4444;
+    --destructive-foreground: #fafafa;
+    --border: #e4e4e7;
+    --input: #e4e4e7;
+    --ring: #1ed760;
+    --chart-1: #1ed760;
+    --chart-2: #1db954;
+    --chart-3: #539df5;
+    --chart-4: #ffa42b;
+    --chart-5: #f3727f;
+    --radius: 0.5rem;
+    --sidebar: #fafafa;
+    --sidebar-foreground: #18181b;
+    --sidebar-primary: #1ed760;
+    --sidebar-primary-foreground: #000000;
+    --sidebar-accent: #f4f4f5;
+    --sidebar-accent-foreground: #18181b;
+    --sidebar-border: #e4e4e7;
+    --sidebar-ring: #1ed760;
   }
 
   .dark {
-    --background: oklch(0.05 0 0 / 0%);
-    /* Transparent */
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0 0 0 / 40%);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.12 0 0 / 75%);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0 / 50%);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0 / 50%);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0 / 50%);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 15%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0 / 50%);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0 0 0 / 30%);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0 / 50%);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 15%);
-    --sidebar-ring: oklch(0.556 0 0 / 50%);
+    --background: #09090b;
+    --foreground: #fafafa;
+    --card: #09090b;
+    --card-foreground: #fafafa;
+    --popover: #09090b;
+    --popover-foreground: #fafafa;
+    --primary: #1ed760;
+    --primary-foreground: #000000;
+    --secondary: #27272a;
+    --secondary-foreground: #fafafa;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+    --accent: #27272a;
+    --accent-foreground: #fafafa;
+    --destructive: #ef4444;
+    --destructive-foreground: #fafafa;
+    --border: #27272a;
+    --input: #27272a;
+    --ring: #1ed760;
+    --chart-1: #1ed760;
+    --chart-2: #1db954;
+    --chart-3: #539df5;
+    --chart-4: #ffa42b;
+    --chart-5: #f3727f;
+    --sidebar: #09090b;
+    --sidebar-foreground: #fafafa;
+    --sidebar-primary: #1ed760;
+    --sidebar-primary-foreground: #000000;
+    --sidebar-accent: #27272a;
+    --sidebar-accent-foreground: #fafafa;
+    --sidebar-border: #27272a;
+    --sidebar-ring: #1ed760;
   }
 
   * {
@@ -90,12 +90,6 @@
 
   body {
     @apply bg-background text-foreground bg-fixed;
-    /* Base subtle gradient to ensure fallback */
-    background-color: #f8fafc;
-  }
-
-  .dark body {
-    background-color: #0f172a;
   }
 
   html {
@@ -119,8 +113,8 @@
 
   .custom-scrollbar::-webkit-scrollbar,
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 6px;
+    height: 6px;
   }
 
   .custom-scrollbar::-webkit-scrollbar-track,
@@ -136,66 +130,305 @@
 
   .custom-scrollbar::-webkit-scrollbar-thumb,
   ::-webkit-scrollbar-thumb {
-    background: oklch(1 0 0 / 30%);
-    border: 1px solid oklch(1 0 0 / 20%);
+    background: oklch(1 0 0 / 25%);
     border-radius: 10px;
     background-clip: padding-box;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover,
   ::-webkit-scrollbar-thumb:hover {
-    background: oklch(1 0 0 / 50%);
+    background: oklch(1 0 0 / 45%);
   }
 
   .dark .custom-scrollbar::-webkit-scrollbar-thumb,
   .dark ::-webkit-scrollbar-thumb {
-    background: oklch(1 0 0 / 15%);
-    border: 1px solid oklch(1 0 0 / 5%);
+    background: oklch(1 0 0 / 12%);
   }
 
   .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover,
   .dark ::-webkit-scrollbar-thumb:hover {
-    background: oklch(1 0 0 / 30%);
+    background: oklch(1 0 0 / 28%);
   }
 }
 
 /* ==========================================
-   transitions-dev — motion tokens & styles
+   Minimized sidebar fixes
+   ========================================== */
+[data-collapsible="icon"] [data-slot="sidebar-header"] {
+  padding-inline: 0.25rem;
+}
+
+[data-collapsible="icon"] [data-slot="sidebar-footer"] {
+  padding-inline: 0.25rem;
+}
+
+/* ==========================================
+   Sidebar — Design Engineering Overrides
+   ========================================== */
+
+/* 1. Collapse animation: use --ease-drawer (the drawer curve) instead
+      of shadcn's generic transition-all. Target the sidebar rail width
+      transition that drives the collapse/expand. */
+[data-slot="sidebar"] {
+  transition:
+    width 260ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 200ms cubic-bezier(0.23, 1, 0.32, 1) !important;
+}
+
+/* 2. Nav item hover: subtle 2px slide-right + fast ease-out.
+      Only on pointer-capable devices. */
+@media (hover: hover) and (pointer: fine) {
+  [data-slot="sidebar-menu-button"] {
+    transition:
+      background-color 150ms cubic-bezier(0.23, 1, 0.32, 1),
+      color            150ms cubic-bezier(0.23, 1, 0.32, 1),
+      transform        150ms cubic-bezier(0.23, 1, 0.32, 1) !important;
+  }
+
+  [data-slot="sidebar-menu-button"]:not([data-active="true"]):hover {
+    transform: translateX(2px) !important;
+  }
+}
+
+/* 3. Active item: green pill with glow — clear position signal. */
+[data-slot="sidebar-menu-button"][data-active="true"] {
+  background: rgba(30, 215, 96, 0.12) !important;
+  color: #1ed760 !important;
+  box-shadow: inset 0 0 0 1px rgba(30, 215, 96, 0.2) !important;
+  transform: none !important;
+}
+
+[data-slot="sidebar-menu-button"][data-active="true"]:hover {
+  background: rgba(30, 215, 96, 0.18) !important;
+}
+
+/* Active item icon inherits the green */
+[data-slot="sidebar-menu-button"][data-active="true"] svg {
+  color: #1ed760;
+}
+
+/* 4. Inactive items: muted text, dimmer icons — clear hierarchy. */
+[data-slot="sidebar-menu-button"]:not([data-active="true"]) {
+  color: oklch(0.65 0 0) !important;
+}
+
+.dark [data-slot="sidebar-menu-button"]:not([data-active="true"]) {
+  color: oklch(0.55 0 0) !important;
+}
+
+[data-slot="sidebar-menu-button"]:not([data-active="true"]):hover {
+  color: oklch(0.9 0 0) !important;
+}
+
+/* 5. Press feedback on nav items (they ARE pressable) */
+[data-slot="sidebar-menu-button"]:active {
+  transform: scale(0.97) translateX(0) !important;
+}
+
+/* 6. Status dot: smooth color+glow transition instead of keyframe pulse */
+.scraper-status-dot {
+  transition:
+    background-color 400ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow       400ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.scraper-status-dot[data-status="running"] {
+  background-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+.scraper-status-dot[data-status="success"] {
+  background-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+}
+
+.scraper-status-dot[data-status="error"] {
+  background-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+}
+
+.scraper-status-dot[data-status="idle"] {
+  background-color: oklch(0.5 0 0);
+  box-shadow: none;
+}
+
+/* 7. Logo tile: ambient glow halo */
+.sidebar-logo {
+  box-shadow:
+    0 4px 12px rgba(30, 215, 96, 0.3),
+    0 0 0 1px rgba(30, 215, 96, 0.15) inset;
+  transition: box-shadow 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-logo:hover {
+    box-shadow:
+      0 6px 20px rgba(30, 215, 96, 0.4),
+      0 0 0 1px rgba(30, 215, 96, 0.3) inset;
+  }
+}
+
+/* 8. Sidebar trigger (the collapse chevron button): rotate icon on state */
+.sidebar-trigger-chevron {
+  transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+
+.sidebar-trigger-chevron[data-collapsed="true"] {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="sidebar"],
+  [data-slot="sidebar-menu-button"],
+  .scraper-status-dot,
+  .sidebar-logo,
+  .sidebar-trigger-chevron {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+
+/* ==========================================
+   Emil Design Eng — Global Motion Tokens
    ========================================== */
 :root {
+  /* Strong custom easings — never use browser defaults for UI */
+  --ease-out-expo:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-expo: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-spring:      cubic-bezier(0.34, 1.45, 0.64, 1);
+  --ease-drawer:      cubic-bezier(0.32, 0.72, 0, 1);
+
   /* Card resize */
-  --resize-dur: 300ms;
-  --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --resize-dur:  300ms;
+  --resize-ease: cubic-bezier(0.23, 1, 0.32, 1);
   /* Number pop-in */
-  --digit-dur: 500ms;
+  --digit-dur:      500ms;
   --digit-distance: 8px;
-  --digit-stagger: 70ms;
-  --digit-blur: 2px;
-  --digit-ease: cubic-bezier(0.34, 1.45, 0.64, 1);
+  --digit-stagger:  70ms;
+  --digit-blur:     2px;
+  --digit-ease:     cubic-bezier(0.34, 1.45, 0.64, 1);
   --digit-dir-x: 0;
   --digit-dir-y: 1;
   /* Icon swap */
-  --icon-swap-dur: 250ms;
-  --icon-swap-blur: 2px;
+  --icon-swap-dur:         250ms;
+  --icon-swap-blur:        2px;
   --icon-swap-start-scale: 0.25;
-  --icon-swap-ease: ease-in-out;
+  --icon-swap-ease:        ease-in-out;
   /* Tabs sliding */
-  --tabs-dur: 250ms;
-  --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --tabs-dur:        250ms;
+  --tabs-ease:       cubic-bezier(0.23, 1, 0.32, 1);
   --tabs-text-muted: rgba(15, 15, 15, 0.6);
   --tabs-text-active: #000000;
-  --tabs-bar-bg: rgba(0, 0, 0, 0.05);
-  --tabs-pill-bg: #ffffff;
+  --tabs-bar-bg:     rgba(0, 0, 0, 0.05);
+  --tabs-pill-bg:    #ffffff;
 }
 
 .dark {
-  --tabs-text-muted: rgba(255, 255, 255, 0.5);
+  --tabs-text-muted:  rgba(255, 255, 255, 0.5);
   --tabs-text-active: #ffffff;
-  --tabs-bar-bg: rgba(255, 255, 255, 0.05);
-  --tabs-pill-bg: rgba(255, 255, 255, 0.15);
+  --tabs-bar-bg:      rgba(255, 255, 255, 0.05);
+  --tabs-pill-bg:     rgba(255, 255, 255, 0.15);
 }
 
-/* Icon Swap */
+/* ==========================================
+   Press Scale — every pressable element
+   ========================================== */
+.press-scale {
+  transition: transform 160ms var(--ease-out-expo);
+  will-change: transform;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .press-scale:hover {
+    transform: scale(1.03);
+  }
+}
+
+.press-scale:active {
+  transform: scale(0.97) !important;
+}
+
+/* ==========================================
+   Stagger Fade-Up — list/grid mounts
+   ========================================== */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .stagger-item {
+    opacity: 0;
+    animation: fade-up 280ms var(--ease-out-expo) both;
+  }
+  .stagger-item:nth-child(1)  { animation-delay: 0ms; }
+  .stagger-item:nth-child(2)  { animation-delay: 40ms; }
+  .stagger-item:nth-child(3)  { animation-delay: 80ms; }
+  .stagger-item:nth-child(4)  { animation-delay: 120ms; }
+  .stagger-item:nth-child(5)  { animation-delay: 160ms; }
+  .stagger-item:nth-child(6)  { animation-delay: 200ms; }
+  .stagger-item:nth-child(7)  { animation-delay: 220ms; }
+  .stagger-item:nth-child(8)  { animation-delay: 240ms; }
+  .stagger-item:nth-child(9)  { animation-delay: 260ms; }
+  .stagger-item:nth-child(10) { animation-delay: 280ms; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger-item {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+/* ==========================================
+   Shimmer Skeleton — loading placeholders
+   ========================================== */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to   { background-position:  200% 0; }
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      oklch(0.22 0 0 / 70%) 25%,
+      oklch(0.30 0 0 / 70%) 50%,
+      oklch(0.22 0 0 / 70%) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s var(--ease-in-out-expo) infinite;
+    border-radius: 0.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    background: oklch(0.22 0 0 / 70%);
+    animation: none;
+  }
+}
+
+/* ==========================================
+   Progress Bar Entrance — scaleX from left
+   ========================================== */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes progress-in {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+
+  .progress-animate > * {
+    transform-origin: left center;
+    animation: progress-in 600ms var(--ease-out-expo) both;
+  }
+}
+
+/* ==========================================
+   Icon Swap
+   ========================================== */
 .t-icon-swap {
   position: relative;
   display: inline-grid;
@@ -231,17 +464,21 @@
   .t-icon-swap .t-icon { transition: none !important; }
 }
 
-/* Number Pop-in */
-@keyframes t-digit-pop-in {
-  0%   {
-    transform: translate(
-      calc(var(--digit-distance) * var(--digit-dir-x)),
-      calc(var(--digit-distance) * var(--digit-dir-y))
-    );
-    opacity: 0;
-    filter: blur(var(--digit-blur));
+/* ==========================================
+   Number Pop-in
+   ========================================== */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes t-digit-pop-in {
+    0%   {
+      transform: translate(
+        calc(var(--digit-distance) * var(--digit-dir-x)),
+        calc(var(--digit-distance) * var(--digit-dir-y))
+      );
+      opacity: 0;
+      filter: blur(var(--digit-blur));
+    }
+    100% { transform: translate(0, 0); opacity: 1; filter: blur(0); }
   }
-  100% { transform: translate(0, 0); opacity: 1; filter: blur(0); }
 }
 
 .t-digit-group {
@@ -252,21 +489,26 @@
   display: inline-block;
   will-change: transform, opacity, filter;
 }
-.t-digit-group.is-animating .t-digit {
-  animation: t-digit-pop-in var(--digit-dur) var(--digit-ease) both;
-}
-.t-digit-group.is-animating .t-digit[data-stagger="1"] {
-  animation-delay: var(--digit-stagger);
-}
-.t-digit-group.is-animating .t-digit[data-stagger="2"] {
-  animation-delay: calc(var(--digit-stagger) * 2);
+
+@media (prefers-reduced-motion: no-preference) {
+  .t-digit-group.is-animating .t-digit {
+    animation: t-digit-pop-in var(--digit-dur) var(--digit-ease) both;
+  }
+  .t-digit-group.is-animating .t-digit[data-stagger="1"] {
+    animation-delay: var(--digit-stagger);
+  }
+  .t-digit-group.is-animating .t-digit[data-stagger="2"] {
+    animation-delay: calc(var(--digit-stagger) * 2);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .t-digit-group .t-digit { animation: none !important; }
 }
 
-/* Tabs Sliding */
+/* ==========================================
+   Tabs Sliding
+   ========================================== */
 .t-tabs {
   position: relative;
   display: inline-flex;
@@ -319,7 +561,9 @@
   .t-tabs-pill, .t-tab { transition: none !important; }
 }
 
-/* Card Resize (Terminal collapse) */
+/* ==========================================
+   Card Resize (Terminal collapse)
+   ========================================== */
 .t-resize-height {
   transition:
     max-height var(--resize-dur) var(--resize-ease),
@@ -330,4 +574,23 @@
 
 @media (prefers-reduced-motion: reduce) {
   .t-resize-height { transition: none !important; }
+}
+
+/* ==========================================
+   Ambient Blob Drift (decorative, rare)
+   ========================================== */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes blob-drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    33%  { transform: translate(2%, 1.5%) scale(1.03); }
+    66%  { transform: translate(-1.5%, 2%) scale(0.97); }
+    100% { transform: translate(0, 0) scale(1); }
+  }
+
+  .blob-drift {
+    animation: blob-drift 24s ease-in-out infinite alternate;
+  }
+  .blob-drift-slow {
+    animation: blob-drift 30s ease-in-out infinite alternate-reverse;
+  }
 }

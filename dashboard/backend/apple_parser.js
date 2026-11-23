@@ -58,10 +58,22 @@ async function aggregateAppleStats() {
   const jsonDir = path.join(__dirname, '../../apple_music_data/jsons');
   let libraryTracks = [];
   try {
-    const jsonStr = await fs.readFile(path.join(jsonDir, 'Apple Music Library Tracks.json'), 'utf-8');
-    libraryTracks = JSON.parse(jsonStr);
+    const jsonFiles = (await fs.readdir(jsonDir)).filter(f => f.endsWith('.json'));
+    for (const jf of jsonFiles) {
+      try {
+        const jsonStr = await fs.readFile(path.join(jsonDir, jf), 'utf-8');
+        const parsed = JSON.parse(jsonStr);
+        if (Array.isArray(parsed)) {
+          libraryTracks.push(...parsed);
+        } else if (parsed && Array.isArray(parsed.tracks)) {
+          libraryTracks.push(...parsed.tracks);
+        }
+      } catch (err) {
+        console.warn(`apple_parser: could not load ${jf}:`, err.message);
+      }
+    }
   } catch (e) {
-    console.warn('apple_parser: could not load library tracks json:', e.message);
+    console.warn('apple_parser: could not read jsons dir:', e.message);
   }
 
   const metaMap = {};
